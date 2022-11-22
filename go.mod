@@ -1,6 +1,6 @@
-module compute-starter-kit-go
+module github.com/leedo/activitypub-at-edge
 
-go 1.17
+go 1.19
 
 require (
 	github.com/fastly/compute-sdk-go v0.1.1

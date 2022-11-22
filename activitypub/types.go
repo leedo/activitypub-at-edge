@@ -4,7 +4,7 @@ import "github.com/valyala/fastjson"
 
 type activityPubObject struct {
 	json *fastjson.Value
-	id   []byte
+	ID   []byte
 }
 
 type Person activityPubObject
@@ -13,5 +13,5 @@ type Item activityPubObject
 type Object activityPubObject
 
 type Image struct {
-	url string
+	URL string
 }
