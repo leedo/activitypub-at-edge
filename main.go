@@ -12,7 +12,7 @@ import (
 
 const htmlType = `text/html; charset="UTF-8"`
 
-type instance struct {
+type proxy struct {
 	c *activitypub.Client
 	w fsthttp.ResponseWriter
 	r *fsthttp.Request
@@ -20,7 +20,7 @@ type instance struct {
 
 func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
-		i := newInstance(w, r)
+		i := newProxy(w, r)
 		remoteUrl, err := i.RemoteUrl()
 		if err != nil {
 			i.handleError(fsthttp.StatusBadRequest, err.Error())
@@ -44,12 +44,12 @@ func main() {
 	})
 }
 
-func (i *instance) handleError(status int, msg string) {
+func (i *proxy) handleError(status int, msg string) {
 	i.w.WriteHeader(status)
 	i.w.Write([]byte(msg))
 }
 
-func (i *instance) RemoteUrl() (string, error) {
+func (i *proxy) RemoteUrl() (string, error) {
 	if i.r.Method != "GET" {
 		return "", fmt.Errorf("This method is not allowed")
 	}
@@ -65,11 +65,11 @@ func (i *instance) RemoteUrl() (string, error) {
 	return u.String(), nil
 }
 
-func newInstance(w fsthttp.ResponseWriter, r *fsthttp.Request) *instance {
-	return &instance{activitypub.NewClient(), w, r}
+func newProxy(w fsthttp.ResponseWriter, r *fsthttp.Request) *proxy {
+	return &proxy{activitypub.NewClient(), w, r}
 }
 
-func (i *instance) renderNote(ctx context.Context, n *activitypub.Note) {
+func (i *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
 	p, err := i.c.GetPerson(ctx, n.AttributedTo())
 	if err != nil {
 		i.handleError(fsthttp.StatusBadRequest, err.Error())
@@ -86,7 +86,7 @@ func (i *instance) renderNote(ctx context.Context, n *activitypub.Note) {
 	render.EndHtml(i.w)
 }
 
-func (i *instance) renderPerson(ctx context.Context, p *activitypub.Person) {
+func (i *proxy) renderPerson(ctx context.Context, p *activitypub.Person) {
 	o, err := i.c.GetCollection(ctx, p.Outbox())
 	if err != nil {
 		i.handleError(fsthttp.StatusBadRequest, err.Error())
