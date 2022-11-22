@@ -9,21 +9,18 @@ import (
 	"github.com/leedo/activitypub-at-edge/activitypub"
 )
 
-func Post(w io.Writer, p *activitypub.Person, o *activitypub.Object) {
+func Note(w io.Writer, p *activitypub.Person, n *activitypub.Note) {
 	b := bufio.NewWriter(w)
 	b.WriteString(`<tr><td valign="top" rowspan="2">`)
-	if p != nil {
-		b.WriteString(`<img width="100" src="` + p.Icon().URL + `">`)
-		b.WriteString(`<br>`)
-		b.WriteString(`<strong>` + p.Name() + `</strong>`)
-	}
+
+	b.WriteString(`<a href="/` + string(p.ID) + `"><img width="100" src="` + p.Icon().URL + `"></a>`)
+	b.WriteString(`<br>`)
+	b.WriteString(`<strong><a href="/` + string(p.ID) + `">` + p.Name() + `</a></strong>`)
+
 	b.WriteString(`</td><td valign="top">`)
-	if o != nil {
-		b.Write(o.Content())
-	} else {
-		b.Write(o.ID)
-	}
-	attachments := o.Attachments()
+	b.Write(n.Content())
+
+	attachments := n.Attachments()
 	if len(attachments) > 0 {
 		b.WriteString(`<table border="1" cellpadding="5"><tbody>`)
 		b.WriteString(`<tr><td colspan="` + fmt.Sprintf("%d", len(attachments)) + `">Attachments</td></tr><tr>`)
@@ -45,7 +42,7 @@ func Post(w io.Writer, p *activitypub.Person, o *activitypub.Object) {
 		b.WriteString(`</tbody></table>`)
 	}
 	b.WriteString(`</td></tr><tr><td>`)
-	b.WriteString(`<a href="/` + string(o.ID) + `">` + o.Published() + `</a>`)
+	b.WriteString(`<a href="/` + string(n.ID) + `">` + n.Published() + `</a>`)
 	b.WriteString(`</td></tr>`)
 	b.Flush()
 }

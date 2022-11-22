@@ -10,6 +10,8 @@ import (
 	"github.com/leedo/activitypub-at-edge/render"
 )
 
+const htmlType = `text/html; charset="UTF-8"`
+
 func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 		if r.Method != "GET" {
@@ -32,38 +34,80 @@ func main() {
 		c := activitypub.NewClient()
 		c.AddBackend(remoteUrl.Host)
 
-		p, err := c.GetPerson(ctx, remoteUrl.String())
+		o, err := c.GetObject(ctx, remoteUrl.String())
 		if err != nil {
 			w.WriteHeader(fsthttp.StatusBadRequest)
-			fmt.Fprintf(w, "error fetching person: %s", err)
 			return
 		}
 
-		o, err := c.GetOutbox(ctx, p.Outbox())
-		if err != nil {
+		switch o.Type() {
+		case "Person":
+			renderPerson(ctx, w, c, o.ToPerson())
+		case "Note":
+			renderNote(ctx, w, c, o.ToNote())
+		default:
 			w.WriteHeader(fsthttp.StatusBadRequest)
-			fmt.Fprintf(w, "error fetching outbox: %s", err)
 			return
 		}
-
-		o, err = c.GetOutbox(ctx, o.First())
-		if err != nil {
-			w.WriteHeader(fsthttp.StatusBadRequest)
-			fmt.Fprintf(w, "error fetching outbox: %s", err)
-			return
-		}
-
-		w.Header().Add("Content-Type", `text/html; charset="UTF-8"`)
-		w.WriteHeader(fsthttp.StatusOK)
-
-		w.Write([]byte(`<html><body>`))
-		render.Person(w, p)
-		w.Write([]byte(`<table cellpadding="10" border="1">`))
-		for _, i := range o.Items() {
-			obj, _ := c.GetObject(ctx, i)
-			person, _ := c.GetPerson(ctx, obj.AttributedTo())
-			render.Post(w, person, obj)
-		}
-		w.Write([]byte("</table></body></html>"))
 	})
+}
+
+func renderNote(ctx context.Context, w fsthttp.ResponseWriter, c *activitypub.Client, n *activitypub.Note) {
+	p, err := c.GetPerson(ctx, n.AttributedTo())
+	if err != nil {
+		w.WriteHeader(fsthttp.StatusBadRequest)
+		fmt.Fprintf(w, "error fetching outbox: %s", err)
+		return
+	}
+
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
+
+	render.StartHtml(w)
+	render.StartTable(w)
+	render.Note(w, p, n)
+	render.EndTable(w)
+	render.EndHtml(w)
+}
+
+func renderPerson(ctx context.Context, w fsthttp.ResponseWriter, c *activitypub.Client, p *activitypub.Person) {
+	o, err := c.GetCollection(ctx, p.Outbox())
+	if err != nil {
+		w.WriteHeader(fsthttp.StatusBadRequest)
+		fmt.Fprintf(w, "error fetching outbox: %s", err)
+		return
+	}
+
+	o, err = c.GetCollection(ctx, o.First())
+	if err != nil {
+		w.WriteHeader(fsthttp.StatusBadRequest)
+		fmt.Fprintf(w, "error fetching outbox: %s", err)
+		return
+	}
+
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
+
+	render.StartHtml(w)
+	render.Person(w, p)
+	render.StartTable(w)
+
+	for _, i := range o.CollectionItems() {
+		switch i.Type() {
+		case "Create":
+			obj := i.Object()
+			switch obj.Type() {
+			case "Note":
+				render.Note(w, p, obj.ToNote())
+			default:
+				render.Unknown(w, obj)
+			}
+		case "Announce":
+			obj := i.Object()
+			render.Unknown(w, obj)
+		}
+	}
+
+	render.EndTable(w)
+	render.EndHtml(w)
 }
