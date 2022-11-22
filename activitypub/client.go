@@ -24,16 +24,13 @@ func (s *Client) AddBackend(name string) {
 	s.backends[name] = backend{name}
 }
 
-func (s *Client) LoadObject(o *Object) error {
+func (s *Client) GetObject(ctx context.Context, i *Item) (*Object, error) {
+	o := i.Object()
 	if o.Loaded() {
-		return nil
+		return o, nil
 	}
 
-	return fmt.Errorf("remote Client not supported")
-}
-
-func (s *Client) GetObject(ctx context.Context, remoteUrl string) (*Object, error) {
-	v, err := s.request(ctx, "GET", remoteUrl, nil)
+	v, err := s.request(ctx, "GET", string(o.ID), nil)
 	if err != nil {
 		return nil, err
 	}

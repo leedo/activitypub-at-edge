@@ -7,6 +7,7 @@ import (
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
 	"github.com/leedo/activitypub-at-edge/activitypub"
+	"github.com/leedo/activitypub-at-edge/render"
 )
 
 func main() {
@@ -14,6 +15,10 @@ func main() {
 		if r.Method != "GET" {
 			w.WriteHeader(fsthttp.StatusMethodNotAllowed)
 			fmt.Fprintf(w, "this method is not allowed")
+			return
+		}
+		if r.URL.Path == "/favicon.ico" {
+			w.WriteHeader(fsthttp.StatusNotFound)
 			return
 		}
 
@@ -53,23 +58,9 @@ func main() {
 
 		w.Write([]byte("<html><body><table border=\"1\">"))
 		for _, i := range o.Items() {
-			obj := i.Object()
-			w.Write([]byte("<tr><td>"))
-			person, err := c.GetPerson(ctx, obj.AttributedTo())
-			if err == nil {
-				if i := person.Icon(); i.URL != "" {
-					w.Write([]byte("<img width=\"100\" src=\"" + i.URL + "\"><br>"))
-				}
-				w.Write([]byte(person.Name()))
-			}
-
-			w.Write([]byte("</td><td>"))
-			if err := c.LoadObject(obj); err != nil {
-				fmt.Fprintf(w, "%s: %s", obj.ID, err)
-			} else {
-				w.Write(obj.Content())
-			}
-			w.Write([]byte("</td></tr>"))
+			obj, _ := c.GetObject(ctx, i)
+			person, _ := c.GetPerson(ctx, obj.AttributedTo())
+			render.Post(w, person, obj)
 		}
 		w.Write([]byte("</table></body></html>"))
 	})

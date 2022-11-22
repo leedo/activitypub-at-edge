@@ -15,3 +15,11 @@ type Object activityPubObject
 type Image struct {
 	URL string
 }
+
+type Attachment struct {
+	Type      string
+	MediaType string
+	URL       string
+	Width     uint
+	Height    uint
+}

@@ -8,10 +8,10 @@ func (o *Outbox) Last() string     { return string(o.json.GetStringBytes("last")
 func (o *Outbox) Next() string     { return string(o.json.GetStringBytes("next")) }
 func (o *Outbox) Prev() string     { return string(o.json.GetStringBytes("prev")) }
 
-func (o *Outbox) Items() []Item {
-	items := make([]Item, 0)
+func (o *Outbox) Items() []*Item {
+	items := make([]*Item, 0)
 	for _, v := range o.json.GetArray("orderedItems") {
-		items = append(items, Item{v, v.GetStringBytes("id")})
+		items = append(items, &Item{v, v.GetStringBytes("id")})
 	}
 	return items
 }
