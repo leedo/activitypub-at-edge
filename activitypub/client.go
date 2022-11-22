@@ -2,7 +2,6 @@ package activitypub
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
@@ -12,16 +11,11 @@ import (
 const activityJSON = "application/activity+json"
 
 type Client struct {
-	backends map[string]backend
-	cache    map[string]*Object
+	cache map[string]*Object
 }
 
 type backend struct {
 	name string
-}
-
-func (c *Client) AddBackend(name string) {
-	c.backends[name] = backend{name}
 }
 
 func (c *Client) GetObject(ctx context.Context, remoteUrl string) (*Object, error) {
@@ -63,12 +57,7 @@ func (c *Client) request(ctx context.Context, method string, remoteUrl string, b
 	req.Header.Set("Accept", activityJSON)
 	req.CacheOptions.TTL = 900
 
-	b, ok := c.backends[req.URL.Host]
-	if !ok {
-		return nil, fmt.Errorf("unknown backend %q", req.URL.Host)
-	}
-
-	resp, err := req.Send(ctx, b.name)
+	resp, err := req.Send(ctx, req.URL.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +78,6 @@ func (c *Client) request(ctx context.Context, method string, remoteUrl string, b
 
 func NewClient() *Client {
 	return &Client{
-		backends: make(map[string]backend, 0),
-		cache:    make(map[string]*Object, 0),
+		cache: make(map[string]*Object, 0),
 	}
 }

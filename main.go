@@ -12,102 +12,116 @@ import (
 
 const htmlType = `text/html; charset="UTF-8"`
 
+type instance struct {
+	c *activitypub.Client
+	w fsthttp.ResponseWriter
+	r *fsthttp.Request
+}
+
 func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(fsthttp.StatusMethodNotAllowed)
-			fmt.Fprintf(w, "this method is not allowed")
-			return
-		}
-		if r.URL.Path == "/favicon.ico" {
-			w.WriteHeader(fsthttp.StatusNotFound)
-			return
-		}
-
-		remoteUrl, err := url.Parse(r.URL.Path[1:]) // strip leading slash
+		i := newInstance(w, r)
+		remoteUrl, err := i.RemoteUrl()
 		if err != nil {
-			w.WriteHeader(fsthttp.StatusBadRequest)
-			fmt.Fprintf(w, "invalid URL: %s", err)
+			i.handleError(fsthttp.StatusBadRequest, err.Error())
 			return
 		}
 
-		c := activitypub.NewClient()
-		c.AddBackend(remoteUrl.Host)
-
-		o, err := c.GetObject(ctx, remoteUrl.String())
+		o, err := i.c.GetObject(ctx, remoteUrl)
 		if err != nil {
-			w.WriteHeader(fsthttp.StatusBadRequest)
+			i.handleError(fsthttp.StatusBadRequest, err.Error())
 			return
 		}
 
 		switch o.Type() {
 		case "Person":
-			renderPerson(ctx, w, c, o.ToPerson())
+			i.renderPerson(ctx, o.ToPerson())
 		case "Note":
-			renderNote(ctx, w, c, o.ToNote())
+			i.renderNote(ctx, o.ToNote())
 		default:
-			w.WriteHeader(fsthttp.StatusBadRequest)
-			return
+			i.handleError(fsthttp.StatusBadRequest, "unknown object type")
 		}
 	})
 }
 
-func renderNote(ctx context.Context, w fsthttp.ResponseWriter, c *activitypub.Client, n *activitypub.Note) {
-	p, err := c.GetPerson(ctx, n.AttributedTo())
-	if err != nil {
-		w.WriteHeader(fsthttp.StatusBadRequest)
-		fmt.Fprintf(w, "error fetching outbox: %s", err)
-		return
-	}
-
-	w.Header().Add("Content-Type", htmlType)
-	w.WriteHeader(fsthttp.StatusOK)
-
-	render.StartHtml(w)
-	render.StartTable(w)
-	render.Note(w, p, n)
-	render.EndTable(w)
-	render.EndHtml(w)
+func (i *instance) handleError(status int, msg string) {
+	i.w.WriteHeader(status)
+	i.w.Write([]byte(msg))
 }
 
-func renderPerson(ctx context.Context, w fsthttp.ResponseWriter, c *activitypub.Client, p *activitypub.Person) {
-	o, err := c.GetCollection(ctx, p.Outbox())
+func (i *instance) RemoteUrl() (string, error) {
+	if i.r.Method != "GET" {
+		return "", fmt.Errorf("This method is not allowed")
+	}
+	if i.r.URL.Path == "/favicon.ico" {
+		return "", fmt.Errorf("Not Found")
+	}
+
+	u, err := url.Parse(i.r.URL.Path[1:]) // strip leading slash
 	if err != nil {
-		w.WriteHeader(fsthttp.StatusBadRequest)
-		fmt.Fprintf(w, "error fetching outbox: %s", err)
+		return "", fmt.Errorf("Invalid URL")
+	}
+
+	return u.String(), nil
+}
+
+func newInstance(w fsthttp.ResponseWriter, r *fsthttp.Request) *instance {
+	return &instance{activitypub.NewClient(), w, r}
+}
+
+func (i *instance) renderNote(ctx context.Context, n *activitypub.Note) {
+	p, err := i.c.GetPerson(ctx, n.AttributedTo())
+	if err != nil {
+		i.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	o, err = c.GetCollection(ctx, o.First())
+	i.w.Header().Add("Content-Type", htmlType)
+	i.w.WriteHeader(fsthttp.StatusOK)
+
+	render.StartHtml(i.w)
+	render.StartTable(i.w)
+	render.Note(i.w, p, n)
+	render.EndTable(i.w)
+	render.EndHtml(i.w)
+}
+
+func (i *instance) renderPerson(ctx context.Context, p *activitypub.Person) {
+	o, err := i.c.GetCollection(ctx, p.Outbox())
 	if err != nil {
-		w.WriteHeader(fsthttp.StatusBadRequest)
-		fmt.Fprintf(w, "error fetching outbox: %s", err)
+		i.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	w.Header().Add("Content-Type", htmlType)
-	w.WriteHeader(fsthttp.StatusOK)
+	o, err = i.c.GetCollection(ctx, o.First())
+	if err != nil {
+		i.handleError(fsthttp.StatusBadRequest, err.Error())
+		return
+	}
 
-	render.StartHtml(w)
-	render.Person(w, p)
-	render.StartTable(w)
+	i.w.Header().Add("Content-Type", htmlType)
+	i.w.WriteHeader(fsthttp.StatusOK)
 
-	for _, i := range o.CollectionItems() {
-		switch i.Type() {
+	render.StartHtml(i.w)
+	render.Person(i.w, p)
+	render.StartTable(i.w)
+
+	for _, item := range o.CollectionItems() {
+		switch item.Type() {
 		case "Create":
-			obj := i.Object()
+			obj := item.Object()
 			switch obj.Type() {
 			case "Note":
-				render.Note(w, p, obj.ToNote())
+				render.Note(i.w, p, obj.ToNote())
 			default:
-				render.Unknown(w, obj)
+				render.Unknown(i.w, obj)
 			}
 		case "Announce":
-			obj := i.Object()
-			render.Unknown(w, obj)
+			obj := item.Object()
+			render.Unknown(i.w, obj)
 		}
 	}
 
-	render.EndTable(w)
-	render.EndHtml(w)
+	render.EndTable(i.w)
+	render.EndHtml(i.w)
 }
