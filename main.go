@@ -44,6 +44,10 @@ func main() {
 	})
 }
 
+func newProxy(w fsthttp.ResponseWriter, r *fsthttp.Request) *proxy {
+	return &proxy{activitypub.NewClient(), w, r}
+}
+
 func (i *proxy) handleError(status int, msg string) {
 	i.w.WriteHeader(status)
 	i.w.Write([]byte(msg))
@@ -63,10 +67,6 @@ func (i *proxy) RemoteUrl() (string, error) {
 	}
 
 	return u.String(), nil
-}
-
-func newProxy(w fsthttp.ResponseWriter, r *fsthttp.Request) *proxy {
-	return &proxy{activitypub.NewClient(), w, r}
 }
 
 func (i *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
@@ -93,7 +93,7 @@ func (i *proxy) renderPerson(ctx context.Context, p *activitypub.Person) {
 		return
 	}
 
-	o, err = i.c.GetCollection(ctx, o.First())
+	col, err = i.c.GetCollection(ctx, o.First())
 	if err != nil {
 		i.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
@@ -106,15 +106,15 @@ func (i *proxy) renderPerson(ctx context.Context, p *activitypub.Person) {
 	render.Person(i.w, p)
 	render.StartTable(i.w)
 
-	for _, item := range o.CollectionItems() {
+	for _, item := range col.CollectionItems() {
 		switch item.Type() {
 		case "Create":
-			obj := item.Object()
-			switch obj.Type() {
+			o := item.Object()
+			switch o.Type() {
 			case "Note":
-				render.Note(i.w, p, obj.ToNote())
+				render.Note(i.w, p, o.ToNote())
 			default:
-				render.Unknown(i.w, obj)
+				render.Unknown(i.w, o)
 			}
 		case "Announce":
 			obj := item.Object()
