@@ -9,6 +9,10 @@ func (p *Person) Icon() Image {
 	return Image{string(p.json.Get("icon").GetStringBytes("url"))}
 }
 
+func (p *Person) Image() Image {
+	return Image{string(p.json.Get("image").GetStringBytes("url"))}
+}
+
 func NewPerson(v *fastjson.Value) *Person {
 	return &Person{v, v.GetStringBytes("id")}
 }

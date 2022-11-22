@@ -22,4 +22,5 @@ type Attachment struct {
 	URL       string
 	Width     uint
 	Height    uint
+	Name      string
 }

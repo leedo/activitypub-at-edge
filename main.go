@@ -53,10 +53,12 @@ func main() {
 			return
 		}
 
-		w.Header().Add("Content-Type", "text/html; charset=\"UTF-8\"")
+		w.Header().Add("Content-Type", `text/html; charset="UTF-8"`)
 		w.WriteHeader(fsthttp.StatusOK)
 
-		w.Write([]byte("<html><body><table border=\"1\">"))
+		w.Write([]byte(`<html><body>`))
+		render.Person(w, p)
+		w.Write([]byte(`<table cellpadding="10" border="1">`))
 		for _, i := range o.Items() {
 			obj, _ := c.GetObject(ctx, i)
 			person, _ := c.GetPerson(ctx, obj.AttributedTo())
