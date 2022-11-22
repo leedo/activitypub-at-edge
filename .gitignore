@@ -1,0 +1,4 @@
+fastly.toml
+servers
+bin/main.wasm
+pkg/
