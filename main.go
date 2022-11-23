@@ -87,13 +87,13 @@ func (i *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
 }
 
 func (i *proxy) renderPerson(ctx context.Context, p *activitypub.Person) {
-	o, err := i.c.GetCollection(ctx, p.Outbox())
+	col, err := i.c.GetCollection(ctx, p.Outbox())
 	if err != nil {
 		i.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	col, err = i.c.GetCollection(ctx, o.First())
+	col, err = i.c.GetCollection(ctx, col.First())
 	if err != nil {
 		i.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
@@ -109,8 +109,7 @@ func (i *proxy) renderPerson(ctx context.Context, p *activitypub.Person) {
 	for _, item := range col.CollectionItems() {
 		switch item.Type() {
 		case "Create":
-			o := item.Object()
-			switch o.Type() {
+			switch o := item.Object(); o.Type() {
 			case "Note":
 				render.Note(i.w, p, o.ToNote())
 			default:
