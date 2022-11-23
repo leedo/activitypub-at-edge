@@ -146,20 +146,24 @@ func (p *proxy) personHandler(ctx context.Context, person *activitypub.Person) {
 func (p *proxy) renderCollectionItem(ctx context.Context, item *activitypub.CollectionItem) {
 	switch item.Type() {
 	case "Create":
-		switch o := item.Object(); o.Type() {
+		o, err := p.c.NewObject(ctx, item.Get("object"))
+		if err != nil {
+			render.Error(p.w, err)
+			return
+		}
+		switch o.Type() {
 		case "Note":
 			note := o.ToNote()
 			person, err := p.c.GetPerson(ctx, note.AttributedTo())
 			if err != nil {
-				render.Unknown(p.w, o)
+				render.Error(p.w, err)
 			} else {
 				render.Note(p.w, person, note)
 			}
 		default:
-			render.Unknown(p.w, o)
+			render.Unknown(p.w, o.Type())
 		}
 	case "Announce":
-		obj := item.Object()
-		render.Unknown(p.w, obj)
+		render.Unknown(p.w, item.Type())
 	}
 }
