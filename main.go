@@ -83,6 +83,7 @@ func (p *proxy) noteHandler(ctx context.Context, n *activitypub.Note) {
 	render.StartTable(p.w)
 	render.Note(p.w, person, n)
 	render.EndTable(p.w)
+	render.Footer(p.w)
 	render.EndHtml(p.w)
 }
 
@@ -122,5 +123,6 @@ func (p *proxy) personHandler(ctx context.Context, person *activitypub.Person) {
 	}
 
 	render.EndTable(p.w)
+	render.Footer(p.w)
 	render.EndHtml(p.w)
 }
