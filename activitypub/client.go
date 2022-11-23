@@ -14,10 +14,6 @@ type Client struct {
 	cache map[string]*Object
 }
 
-type backend struct {
-	name string
-}
-
 func (c *Client) GetObject(ctx context.Context, remoteUrl string) (*Object, error) {
 	if o, ok := c.cache[remoteUrl]; ok {
 		return o, nil
