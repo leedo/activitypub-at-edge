@@ -23,23 +23,23 @@ func main() {
 		p := newProxy(w, r)
 		remoteUrl, err := p.RemoteUrl()
 		if err != nil {
-			p.handleError(fsthttp.StatusBadRequest, err.Error())
+			p.errorHandler(fsthttp.StatusBadRequest, err.Error())
 			return
 		}
 
 		o, err := p.c.GetObject(ctx, remoteUrl)
 		if err != nil {
-			p.handleError(fsthttp.StatusBadRequest, err.Error())
+			p.errorHandler(fsthttp.StatusBadRequest, err.Error())
 			return
 		}
 
 		switch o.Type() {
 		case "Person":
-			p.renderPerson(ctx, o.ToPerson())
+			p.personHandler(ctx, o.ToPerson())
 		case "Note":
-			p.renderNote(ctx, o.ToNote())
+			p.noteHandler(ctx, o.ToNote())
 		default:
-			p.handleError(fsthttp.StatusBadRequest, "unknown object type")
+			p.errorHandler(fsthttp.StatusBadRequest, "unknown object type")
 		}
 	})
 }
@@ -48,7 +48,7 @@ func newProxy(w fsthttp.ResponseWriter, r *fsthttp.Request) *proxy {
 	return &proxy{activitypub.NewClient(), w, r}
 }
 
-func (p *proxy) handleError(status int, msg string) {
+func (p *proxy) errorHandler(status int, msg string) {
 	p.w.WriteHeader(status)
 	p.w.Write([]byte(msg))
 }
@@ -69,10 +69,10 @@ func (p *proxy) RemoteUrl() (string, error) {
 	return u.String(), nil
 }
 
-func (p *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
+func (p *proxy) noteHandler(ctx context.Context, n *activitypub.Note) {
 	person, err := p.c.GetPerson(ctx, n.AttributedTo())
 	if err != nil {
-		p.handleError(fsthttp.StatusBadRequest, err.Error())
+		p.errorHandler(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -86,16 +86,16 @@ func (p *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
 	render.EndHtml(p.w)
 }
 
-func (p *proxy) renderPerson(ctx context.Context, person *activitypub.Person) {
+func (p *proxy) personHandler(ctx context.Context, person *activitypub.Person) {
 	col, err := p.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
-		p.handleError(fsthttp.StatusBadRequest, err.Error())
+		p.errorHandler(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
 	col, err = p.c.GetCollection(ctx, col.First())
 	if err != nil {
-		p.handleError(fsthttp.StatusBadRequest, err.Error())
+		p.errorHandler(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
