@@ -35,11 +35,11 @@ func main() {
 		}
 
 		switch o.Type() {
-		case "Person":
+		case activitypub.PersonType:
 			p.personHandler(ctx, o.ToPerson())
-		case "Note":
+		case activitypub.NoteType:
 			p.noteHandler(ctx, o.ToNote())
-		case "OrderedCollectionPage":
+		case activitypub.OrderedCollectionPageType:
 			p.collectionHandler(ctx, o.ToCollection())
 		default:
 			p.errorHandler(fsthttp.StatusBadRequest, "unknown object type "+o.Type())

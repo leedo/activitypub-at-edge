@@ -2,6 +2,12 @@ package activitypub
 
 import "github.com/valyala/fastjson"
 
+const (
+	PersonType                = "Person"
+	NoteType                  = "Note"
+	OrderedCollectionPageType = "OrderedCollectionPage"
+)
+
 type Object struct {
 	json *fastjson.Value
 	ID   []byte
