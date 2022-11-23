@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
 	"github.com/leedo/activitypub-at-edge/activitypub"
@@ -38,14 +39,20 @@ func main() {
 			p.personHandler(ctx, o.ToPerson())
 		case "Note":
 			p.noteHandler(ctx, o.ToNote())
+		case "OrderedCollectionPage":
+			p.collectionHandler(ctx, o.ToCollection())
 		default:
-			p.errorHandler(fsthttp.StatusBadRequest, "unknown object type")
+			p.errorHandler(fsthttp.StatusBadRequest, "unknown object type "+o.Type())
 		}
 	})
 }
 
 func newProxy(w fsthttp.ResponseWriter, r *fsthttp.Request) *proxy {
 	return &proxy{activitypub.NewClient(), w, r}
+}
+
+func (p *proxy) debug(msg string) {
+	fmt.Fprintf(os.Stderr, "%s\n", msg)
 }
 
 func (p *proxy) errorHandler(status int, msg string) {
@@ -61,7 +68,7 @@ func (p *proxy) RemoteUrl() (string, error) {
 		return "", fmt.Errorf("Not Found")
 	}
 
-	u, err := url.Parse(p.r.URL.Path[1:]) // strip leading slash
+	u, err := url.Parse(p.r.URL.RequestURI()[1:]) // strip leading slash
 	if err != nil {
 		return "", fmt.Errorf("Invalid URL")
 	}
@@ -87,6 +94,24 @@ func (p *proxy) noteHandler(ctx context.Context, n *activitypub.Note) {
 	render.EndHtml(p.w)
 }
 
+func (p *proxy) collectionHandler(ctx context.Context, col *activitypub.Collection) {
+	p.w.Header().Add("Content-Type", htmlType)
+	p.w.WriteHeader(fsthttp.StatusOK)
+
+	render.StartHtml(p.w)
+	render.Pagination(p.w, col)
+	render.StartTable(p.w)
+
+	for _, item := range col.CollectionItems() {
+		p.renderCollectionItem(ctx, item)
+	}
+
+	render.EndTable(p.w)
+	render.Pagination(p.w, col)
+	render.Footer(p.w)
+	render.EndHtml(p.w)
+}
+
 func (p *proxy) personHandler(ctx context.Context, person *activitypub.Person) {
 	col, err := p.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
@@ -105,24 +130,36 @@ func (p *proxy) personHandler(ctx context.Context, person *activitypub.Person) {
 
 	render.StartHtml(p.w)
 	render.Person(p.w, person)
+	render.Pagination(p.w, col)
 	render.StartTable(p.w)
 
 	for _, item := range col.CollectionItems() {
-		switch item.Type() {
-		case "Create":
-			switch o := item.Object(); o.Type() {
-			case "Note":
-				render.Note(p.w, person, o.ToNote())
-			default:
-				render.Unknown(p.w, o)
-			}
-		case "Announce":
-			obj := item.Object()
-			render.Unknown(p.w, obj)
-		}
+		p.renderCollectionItem(ctx, item)
 	}
 
 	render.EndTable(p.w)
+	render.Pagination(p.w, col)
 	render.Footer(p.w)
 	render.EndHtml(p.w)
+}
+
+func (p *proxy) renderCollectionItem(ctx context.Context, item *activitypub.CollectionItem) {
+	switch item.Type() {
+	case "Create":
+		switch o := item.Object(); o.Type() {
+		case "Note":
+			note := o.ToNote()
+			person, err := p.c.GetPerson(ctx, note.AttributedTo())
+			if err != nil {
+				render.Unknown(p.w, o)
+			} else {
+				render.Note(p.w, person, note)
+			}
+		default:
+			render.Unknown(p.w, o)
+		}
+	case "Announce":
+		obj := item.Object()
+		render.Unknown(p.w, obj)
+	}
 }
