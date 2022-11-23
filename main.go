@@ -20,26 +20,26 @@ type proxy struct {
 
 func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
-		i := newProxy(w, r)
-		remoteUrl, err := i.RemoteUrl()
+		p := newProxy(w, r)
+		remoteUrl, err := p.RemoteUrl()
 		if err != nil {
-			i.handleError(fsthttp.StatusBadRequest, err.Error())
+			p.handleError(fsthttp.StatusBadRequest, err.Error())
 			return
 		}
 
-		o, err := i.c.GetObject(ctx, remoteUrl)
+		o, err := p.c.GetObject(ctx, remoteUrl)
 		if err != nil {
-			i.handleError(fsthttp.StatusBadRequest, err.Error())
+			p.handleError(fsthttp.StatusBadRequest, err.Error())
 			return
 		}
 
 		switch o.Type() {
 		case "Person":
-			i.renderPerson(ctx, o.ToPerson())
+			p.renderPerson(ctx, o.ToPerson())
 		case "Note":
-			i.renderNote(ctx, o.ToNote())
+			p.renderNote(ctx, o.ToNote())
 		default:
-			i.handleError(fsthttp.StatusBadRequest, "unknown object type")
+			p.handleError(fsthttp.StatusBadRequest, "unknown object type")
 		}
 	})
 }
@@ -48,20 +48,20 @@ func newProxy(w fsthttp.ResponseWriter, r *fsthttp.Request) *proxy {
 	return &proxy{activitypub.NewClient(), w, r}
 }
 
-func (i *proxy) handleError(status int, msg string) {
-	i.w.WriteHeader(status)
-	i.w.Write([]byte(msg))
+func (p *proxy) handleError(status int, msg string) {
+	p.w.WriteHeader(status)
+	p.w.Write([]byte(msg))
 }
 
-func (i *proxy) RemoteUrl() (string, error) {
-	if i.r.Method != "GET" {
+func (p *proxy) RemoteUrl() (string, error) {
+	if p.r.Method != "GET" {
 		return "", fmt.Errorf("This method is not allowed")
 	}
-	if i.r.URL.Path == "/favicon.ico" {
+	if p.r.URL.Path == "/favicon.ico" {
 		return "", fmt.Errorf("Not Found")
 	}
 
-	u, err := url.Parse(i.r.URL.Path[1:]) // strip leading slash
+	u, err := url.Parse(p.r.URL.Path[1:]) // strip leading slash
 	if err != nil {
 		return "", fmt.Errorf("Invalid URL")
 	}
@@ -69,58 +69,58 @@ func (i *proxy) RemoteUrl() (string, error) {
 	return u.String(), nil
 }
 
-func (i *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
-	p, err := i.c.GetPerson(ctx, n.AttributedTo())
+func (p *proxy) renderNote(ctx context.Context, n *activitypub.Note) {
+	person, err := p.c.GetPerson(ctx, n.AttributedTo())
 	if err != nil {
-		i.handleError(fsthttp.StatusBadRequest, err.Error())
+		p.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	i.w.Header().Add("Content-Type", htmlType)
-	i.w.WriteHeader(fsthttp.StatusOK)
+	p.w.Header().Add("Content-Type", htmlType)
+	p.w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(i.w)
-	render.StartTable(i.w)
-	render.Note(i.w, p, n)
-	render.EndTable(i.w)
-	render.EndHtml(i.w)
+	render.StartHtml(p.w)
+	render.StartTable(p.w)
+	render.Note(p.w, person, n)
+	render.EndTable(p.w)
+	render.EndHtml(p.w)
 }
 
-func (i *proxy) renderPerson(ctx context.Context, p *activitypub.Person) {
-	col, err := i.c.GetCollection(ctx, p.Outbox())
+func (p *proxy) renderPerson(ctx context.Context, person *activitypub.Person) {
+	col, err := p.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
-		i.handleError(fsthttp.StatusBadRequest, err.Error())
+		p.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	col, err = i.c.GetCollection(ctx, col.First())
+	col, err = p.c.GetCollection(ctx, col.First())
 	if err != nil {
-		i.handleError(fsthttp.StatusBadRequest, err.Error())
+		p.handleError(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	i.w.Header().Add("Content-Type", htmlType)
-	i.w.WriteHeader(fsthttp.StatusOK)
+	p.w.Header().Add("Content-Type", htmlType)
+	p.w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(i.w)
-	render.Person(i.w, p)
-	render.StartTable(i.w)
+	render.StartHtml(p.w)
+	render.Person(p.w, person)
+	render.StartTable(p.w)
 
 	for _, item := range col.CollectionItems() {
 		switch item.Type() {
 		case "Create":
 			switch o := item.Object(); o.Type() {
 			case "Note":
-				render.Note(i.w, p, o.ToNote())
+				render.Note(p.w, person, o.ToNote())
 			default:
-				render.Unknown(i.w, o)
+				render.Unknown(p.w, o)
 			}
 		case "Announce":
 			obj := item.Object()
-			render.Unknown(i.w, obj)
+			render.Unknown(p.w, obj)
 		}
 	}
 
-	render.EndTable(i.w)
-	render.EndHtml(i.w)
+	render.EndTable(p.w)
+	render.EndHtml(p.w)
 }
