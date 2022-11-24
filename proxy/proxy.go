@@ -26,9 +26,15 @@ func (p *proxy) debug(msg string) {
 	fmt.Fprintf(os.Stderr, "%s\n", msg)
 }
 
-func (p *proxy) ErrorHandler(status int, msg string) {
+func (p *proxy) ErrorPage(status int, msg string) {
 	p.w.WriteHeader(status)
-	p.w.Write([]byte(msg))
+	render.StartHtml(p.w)
+	render.StartTable(p.w)
+	render.Error(p.w, msg)
+	render.EndTable(p.w)
+	render.Footer(p.w)
+	render.EndHtml(p.w)
+
 }
 
 func (p *proxy) remoteUrl(r *fsthttp.Request) (string, error) {
@@ -47,10 +53,10 @@ func (p *proxy) remoteUrl(r *fsthttp.Request) (string, error) {
 	return u.String(), nil
 }
 
-func (p *proxy) NoteHandler(ctx context.Context, n *activitypub.Note) {
+func (p *proxy) NotePage(ctx context.Context, n *activitypub.Note) {
 	person, err := p.c.GetPerson(ctx, n.AttributedTo())
 	if err != nil {
-		p.ErrorHandler(fsthttp.StatusBadRequest, err.Error())
+		p.ErrorPage(fsthttp.StatusBadGateway, err.Error())
 		return
 	}
 
@@ -65,7 +71,7 @@ func (p *proxy) NoteHandler(ctx context.Context, n *activitypub.Note) {
 	render.EndHtml(p.w)
 }
 
-func (p *proxy) CollectionHandler(ctx context.Context, col *activitypub.Collection) {
+func (p *proxy) CollectionPage(ctx context.Context, col *activitypub.Collection) {
 	p.w.Header().Add("Content-Type", htmlType)
 	p.w.WriteHeader(fsthttp.StatusOK)
 
@@ -87,16 +93,16 @@ func (p *proxy) renderCollection(ctx context.Context, col *activitypub.Collectio
 	render.Pagination(p.w, col)
 }
 
-func (p *proxy) PersonHandler(ctx context.Context, person *activitypub.Person) {
+func (p *proxy) PersonPage(ctx context.Context, person *activitypub.Person) {
 	col, err := p.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
-		p.ErrorHandler(fsthttp.StatusBadRequest, err.Error())
+		p.ErrorPage(fsthttp.StatusBadGateway, err.Error())
 		return
 	}
 
 	col, err = p.c.GetCollection(ctx, col.First())
 	if err != nil {
-		p.ErrorHandler(fsthttp.StatusBadRequest, err.Error())
+		p.ErrorPage(fsthttp.StatusBadGateway, err.Error())
 		return
 	}
 
@@ -114,7 +120,7 @@ func (p *proxy) PersonHandler(ctx context.Context, person *activitypub.Person) {
 
 func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 	if err := p.c.LoadObject(ctx, o); err != nil {
-		render.Error(p.w, err)
+		render.Error(p.w, err.Error())
 	}
 
 	switch o.Type() {
@@ -122,7 +128,7 @@ func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 		activity := o.ToActivity()
 		subobject := activity.Object()
 		if err := p.c.LoadObject(ctx, subobject); err != nil {
-			render.Error(p.w, err)
+			render.Error(p.w, err.Error())
 		} else {
 			p.renderObject(ctx, subobject)
 		}
@@ -130,7 +136,7 @@ func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 		note := o.ToNote()
 		person, err := p.c.GetPerson(ctx, note.AttributedTo())
 		if err != nil {
-			render.Error(p.w, err)
+			render.Error(p.w, err.Error())
 		} else {
 			render.Note(p.w, person, note)
 		}
@@ -142,24 +148,24 @@ func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 func (p *proxy) GenericRequestHandler(ctx context.Context, r *fsthttp.Request) {
 	remoteUrl, err := p.remoteUrl(r)
 	if err != nil {
-		p.ErrorHandler(fsthttp.StatusBadRequest, err.Error())
+		p.ErrorPage(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
 	o, err := p.c.GetObject(ctx, remoteUrl)
 	if err != nil {
-		p.ErrorHandler(fsthttp.StatusBadRequest, err.Error())
+		p.ErrorPage(fsthttp.StatusBadRequest, err.Error())
 		return
 	}
 
 	switch o.Type() {
 	case activitypub.PersonType:
-		p.PersonHandler(ctx, o.ToPerson())
+		p.PersonPage(ctx, o.ToPerson())
 	case activitypub.NoteType:
-		p.NoteHandler(ctx, o.ToNote())
+		p.NotePage(ctx, o.ToNote())
 	case activitypub.OrderedCollectionPageType, activitypub.OrderedCollectionType:
-		p.CollectionHandler(ctx, o.ToCollection())
+		p.CollectionPage(ctx, o.ToCollection())
 	default:
-		p.ErrorHandler(fsthttp.StatusBadRequest, "unknown object type "+o.Type())
+		p.ErrorPage(fsthttp.StatusNotFound, "unknown object type "+o.Type())
 	}
 }
