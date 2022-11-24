@@ -124,14 +124,19 @@ func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 	}
 
 	switch o.Type() {
-	case activitypub.CreateType, activitypub.AnnounceType:
+	case activitypub.CreateType:
+		p.renderObject(ctx, o.ToActivity().Object())
+
+	case activitypub.AnnounceType:
 		activity := o.ToActivity()
-		subobject := activity.Object()
-		if err := p.c.LoadObject(ctx, subobject); err != nil {
+		person, err := p.c.GetPerson(ctx, activity.Actor())
+		if err != nil {
 			render.Error(p.w, err.Error())
 		} else {
-			p.renderObject(ctx, subobject)
+			render.Announce(p.w, person)
+			p.renderObject(ctx, activity.Object())
 		}
+
 	case activitypub.NoteType:
 		note := o.ToNote()
 		person, err := p.c.GetPerson(ctx, note.AttributedTo())
