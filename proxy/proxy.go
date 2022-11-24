@@ -53,7 +53,8 @@ func (p *proxy) remoteUrl(r *fsthttp.Request) (string, error) {
 	return u.String(), nil
 }
 
-func (p *proxy) NotePage(ctx context.Context, n *activitypub.Note) {
+func (p *proxy) NotePage(ctx context.Context, o *activitypub.Object) {
+	n := o.ToNote()
 	person, err := p.c.GetPerson(ctx, n.AttributedTo())
 	if err != nil {
 		p.ErrorPage(fsthttp.StatusBadGateway, err.Error())
@@ -65,6 +66,11 @@ func (p *proxy) NotePage(ctx context.Context, n *activitypub.Note) {
 
 	render.StartHtml(p.w)
 	render.StartTable(p.w)
+
+	if parent := n.InReplyTo(); parent != nil {
+		p.renderObject(ctx, parent)
+	}
+
 	render.Note(p.w, person, n)
 	render.EndTable(p.w)
 	render.Footer(p.w)
@@ -121,6 +127,7 @@ func (p *proxy) PersonPage(ctx context.Context, person *activitypub.Person) {
 func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 	if err := p.c.LoadObject(ctx, o); err != nil {
 		render.Error(p.w, err.Error())
+		return
 	}
 
 	switch o.Type() {
@@ -145,6 +152,7 @@ func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 		} else {
 			render.Note(p.w, person, note)
 		}
+
 	default:
 		render.Unknown(p.w, o.Type())
 	}
@@ -167,7 +175,7 @@ func (p *proxy) GenericRequestHandler(ctx context.Context, r *fsthttp.Request) {
 	case activitypub.PersonType:
 		p.PersonPage(ctx, o.ToPerson())
 	case activitypub.NoteType:
-		p.NotePage(ctx, o.ToNote())
+		p.NotePage(ctx, o)
 	case activitypub.OrderedCollectionPageType, activitypub.OrderedCollectionType:
 		p.CollectionPage(ctx, o.ToCollection())
 	default:

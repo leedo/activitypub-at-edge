@@ -2,7 +2,6 @@ package activitypub
 
 func (o *Note) Type() string         { return string(o.json.GetStringBytes("type")) }
 func (o *Note) ID() string           { return string(o.json.GetStringBytes("id")) }
-func (o *Note) InReplyTo() string    { return string(o.json.GetStringBytes("inReplyTo")) }
 func (o *Note) URL() string          { return string(o.json.GetStringBytes("url")) }
 func (o *Note) Content() []byte      { return o.json.GetStringBytes("content") }
 func (o *Note) Published() string    { return string(o.json.GetStringBytes("published")) }
@@ -21,4 +20,11 @@ func (o *Note) Attachments() []*Attachment {
 		})
 	}
 	return a
+}
+
+func (o *Note) InReplyTo() *Object {
+	if v := o.json.Get("inReplyTo"); v != nil {
+		return &Object{v}
+	}
+	return nil
 }

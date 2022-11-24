@@ -6,5 +6,5 @@ import (
 )
 
 func Error(w io.Writer, err string) {
-	w.Write([]byte(fmt.Sprintf(`<tr><td></td><td>Error: %s</td></tr>`, err)))
+	w.Write([]byte(fmt.Sprintf(`<tr><td></td><td>%s</td></tr>`, err)))
 }

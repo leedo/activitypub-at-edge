@@ -59,6 +59,12 @@ func (c *Client) request(ctx context.Context, method string, remoteUrl string, b
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fsthttp.StatusOK {
+		return nil, fmt.Errorf("error fetching %s: %d", remoteUrl, resp.StatusCode)
+	}
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
