@@ -34,7 +34,6 @@ func (p *proxy) ErrorPage(status int, msg string) {
 	render.EndTable(p.w)
 	render.Footer(p.w)
 	render.EndHtml(p.w)
-
 }
 
 func (p *proxy) remoteUrl(r *fsthttp.Request) (string, error) {
@@ -112,7 +111,7 @@ func (p *proxy) PersonPage(ctx context.Context, person *activitypub.Person) {
 	p.w.WriteHeader(fsthttp.StatusOK)
 
 	render.StartHtml(p.w)
-	render.Person(p.w, person)
+	render.PersonHeader(p.w, person)
 
 	p.renderCollection(ctx, col)
 
