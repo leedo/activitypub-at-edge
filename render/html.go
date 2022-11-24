@@ -3,7 +3,7 @@ package render
 import "io"
 
 func StartHtml(w io.Writer) {
-	w.Write([]byte(`<HTML><BODY>`))
+	w.Write([]byte(`<HTML><HEAD><STYLE TYPE="text/css" REL="stylesheet">body { font-family: "Comic Sans MS", "Comic Sans", cursive; }</STYLE></HEAD><BODY>`))
 }
 func EndHtml(w io.Writer) {
 	w.Write([]byte(`</BODY><HTML>`))

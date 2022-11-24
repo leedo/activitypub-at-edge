@@ -8,7 +8,7 @@ import (
 )
 
 func Pagination(w io.Writer, c *activitypub.Collection) {
-	w.Write([]byte(`<A HREF="/` + c.Prev() + `">Prev</A> | `))
-	w.Write([]byte(`<A HREF="/` + c.Next() + `">Next</A> `))
+	w.Write([]byte(`<A HREF="/` + c.Prev() + `">Newer</A> | `))
+	w.Write([]byte(`<A HREF="/` + c.Next() + `">Older</A> `))
 	w.Write([]byte(fmt.Sprintf("%d posts", c.TotalCollectionItems())))
 }

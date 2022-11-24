@@ -1,6 +1,7 @@
 package activitypub
 
 func (p *Person) ID() string     { return string(p.json.GetStringBytes("id")) }
+func (p *Person) URL() string    { return string(p.json.GetStringBytes("url")) }
 func (p *Person) Outbox() string { return string(p.json.GetStringBytes("outbox")) }
 func (p *Person) Name() string   { return string(p.json.GetStringBytes("name")) }
 
