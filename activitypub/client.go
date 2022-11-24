@@ -24,7 +24,7 @@ func (c *Client) GetObject(ctx context.Context, remoteUrl string) (*Object, erro
 	if err != nil {
 		return nil, err
 	}
-	o := &Object{v, v.GetStringBytes("id")}
+	o := &Object{v}
 	c.cache[remoteUrl] = o
 	return o, nil
 }
@@ -73,6 +73,17 @@ func (c *Client) request(ctx context.Context, method string, remoteUrl string, b
 	return v, nil
 }
 
+func (c *Client) LoadObject(ctx context.Context, o *Object) error {
+	if !o.IsLoaded() {
+		v, err := c.request(ctx, "GET", o.ID(), nil)
+		if err != nil {
+			return err
+		}
+		o.json = v
+	}
+	return nil
+}
+
 func (c *Client) NewObject(ctx context.Context, v *fastjson.Value) (*Object, error) {
 	if v == nil {
 		return nil, fmt.Errorf("unexpected nil JSON")
@@ -81,18 +92,10 @@ func (c *Client) NewObject(ctx context.Context, v *fastjson.Value) (*Object, err
 	case fastjson.TypeString:
 		return c.GetObject(ctx, string(v.GetStringBytes()))
 	case fastjson.TypeObject:
-		return &Object{v, v.GetStringBytes("id")}, nil
+		return &Object{v}, nil
 	default:
 		return nil, fmt.Errorf("unexpected JSON type for object %s", v.Type())
 	}
-}
-
-func (c *Client) NewPerson(ctx context.Context, v *fastjson.Value) (*Person, error) {
-	o, err := c.NewObject(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-	return o.ToPerson(), nil
 }
 
 func NewClient() *Client {

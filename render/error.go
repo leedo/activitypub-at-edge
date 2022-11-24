@@ -1,7 +1,10 @@
 package render
 
-import "io"
+import (
+	"fmt"
+	"io"
+)
 
 func Error(w io.Writer, err error) {
-	w.Write([]byte(err.Error()))
+	w.Write([]byte(fmt.Sprintf(`<tr><td></td><td>Error: %s</td></tr>`, err.Error())))
 }

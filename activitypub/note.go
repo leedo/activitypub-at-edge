@@ -1,8 +1,7 @@
 package activitypub
 
-import "github.com/valyala/fastjson"
-
 func (o *Note) Type() string         { return string(o.json.GetStringBytes("type")) }
+func (o *Note) ID() string           { return string(o.json.GetStringBytes("id")) }
 func (o *Note) InReplyTo() string    { return string(o.json.GetStringBytes("inReplyTo")) }
 func (o *Note) URL() string          { return string(o.json.GetStringBytes("url")) }
 func (o *Note) Content() []byte      { return o.json.GetStringBytes("content") }
@@ -22,8 +21,4 @@ func (o *Note) Attachments() []*Attachment {
 		})
 	}
 	return a
-}
-
-func NewNote(v *fastjson.Value) *Note {
-	return &Note{v, v.GetStringBytes("id")}
 }

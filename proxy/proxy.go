@@ -70,17 +70,21 @@ func (p *proxy) CollectionHandler(ctx context.Context, col *activitypub.Collecti
 	p.w.WriteHeader(fsthttp.StatusOK)
 
 	render.StartHtml(p.w)
+	p.renderCollection(ctx, col)
+	render.Footer(p.w)
+	render.EndHtml(p.w)
+}
+
+func (p *proxy) renderCollection(ctx context.Context, col *activitypub.Collection) {
 	render.Pagination(p.w, col)
 	render.StartTable(p.w)
 
-	for _, item := range col.CollectionItems() {
-		p.renderCollectionItem(ctx, item)
+	for _, o := range col.CollectionItems() {
+		p.renderObject(ctx, o)
 	}
 
 	render.EndTable(p.w)
 	render.Pagination(p.w, col)
-	render.Footer(p.w)
-	render.EndHtml(p.w)
 }
 
 func (p *proxy) PersonHandler(ctx context.Context, person *activitypub.Person) {
@@ -101,41 +105,37 @@ func (p *proxy) PersonHandler(ctx context.Context, person *activitypub.Person) {
 
 	render.StartHtml(p.w)
 	render.Person(p.w, person)
-	render.Pagination(p.w, col)
-	render.StartTable(p.w)
 
-	for _, item := range col.CollectionItems() {
-		p.renderCollectionItem(ctx, item)
-	}
+	p.renderCollection(ctx, col)
 
-	render.EndTable(p.w)
-	render.Pagination(p.w, col)
 	render.Footer(p.w)
 	render.EndHtml(p.w)
 }
 
-func (p *proxy) renderCollectionItem(ctx context.Context, item *activitypub.CollectionItem) {
-	switch item.Type() {
-	case "Create":
-		o, err := p.c.NewObject(ctx, item.Get("object"))
+func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
+	if err := p.c.LoadObject(ctx, o); err != nil {
+		render.Error(p.w, err)
+	}
+
+	switch o.Type() {
+	case activitypub.CreateType, activitypub.AnnounceType:
+		activity := o.ToActivity()
+		subobject := activity.Object()
+		if err := p.c.LoadObject(ctx, subobject); err != nil {
+			render.Error(p.w, err)
+		} else {
+			p.renderObject(ctx, subobject)
+		}
+	case activitypub.NoteType:
+		note := o.ToNote()
+		person, err := p.c.GetPerson(ctx, note.AttributedTo())
 		if err != nil {
 			render.Error(p.w, err)
-			return
+		} else {
+			render.Note(p.w, person, note)
 		}
-		switch o.Type() {
-		case "Note":
-			note := o.ToNote()
-			person, err := p.c.GetPerson(ctx, note.AttributedTo())
-			if err != nil {
-				render.Error(p.w, err)
-			} else {
-				render.Note(p.w, person, note)
-			}
-		default:
-			render.Unknown(p.w, o.Type())
-		}
-	case "Announce":
-		render.Unknown(p.w, item.Type())
+	default:
+		render.Unknown(p.w, o.Type())
 	}
 }
 
@@ -157,7 +157,7 @@ func (p *proxy) GenericRequestHandler(ctx context.Context, r *fsthttp.Request) {
 		p.PersonHandler(ctx, o.ToPerson())
 	case activitypub.NoteType:
 		p.NoteHandler(ctx, o.ToNote())
-	case activitypub.OrderedCollectionPageType:
+	case activitypub.OrderedCollectionPageType, activitypub.OrderedCollectionType:
 		p.CollectionHandler(ctx, o.ToCollection())
 	default:
 		p.ErrorHandler(fsthttp.StatusBadRequest, "unknown object type "+o.Type())
