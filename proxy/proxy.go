@@ -54,24 +54,20 @@ func (p *proxy) remoteUrl(r *fsthttp.Request) (string, error) {
 }
 
 func (p *proxy) NotePage(ctx context.Context, o *activitypub.Object) {
-	n := o.ToNote()
-	person, err := p.c.GetPerson(ctx, n.AttributedTo())
-	if err != nil {
-		p.ErrorPage(fsthttp.StatusBadGateway, err.Error())
-		return
-	}
-
 	p.w.Header().Add("Content-Type", htmlType)
 	p.w.WriteHeader(fsthttp.StatusOK)
 
 	render.StartHtml(p.w)
 	render.StartTable(p.w)
 
+	n := o.ToNote()
+
 	if parent := n.InReplyTo(); parent != nil {
 		p.renderObject(ctx, parent)
 	}
 
-	render.Note(p.w, person, n)
+	p.renderObject(ctx, o)
+
 	render.EndTable(p.w)
 	render.Footer(p.w)
 	render.EndHtml(p.w)
