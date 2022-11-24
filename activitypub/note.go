@@ -1,5 +1,7 @@
 package activitypub
 
+import "github.com/valyala/fastjson"
+
 func (o *Note) Type() string         { return string(o.json.GetStringBytes("type")) }
 func (o *Note) ID() string           { return string(o.json.GetStringBytes("id")) }
 func (o *Note) URL() string          { return string(o.json.GetStringBytes("url")) }
@@ -23,7 +25,7 @@ func (o *Note) Attachments() []*Attachment {
 }
 
 func (o *Note) InReplyTo() *Object {
-	if v := o.json.Get("inReplyTo"); v != nil {
+	if v := o.json.Get("inReplyTo"); v != nil && v.Type() != fastjson.TypeNull {
 		return &Object{v}
 	}
 	return nil
