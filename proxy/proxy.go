@@ -8,18 +8,20 @@ import (
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
 	"github.com/leedo/activitypub-at-edge/activitypub"
+	"github.com/leedo/activitypub-at-edge/auth"
 	"github.com/leedo/activitypub-at-edge/render"
 )
 
 const htmlType = `text/html; charset="UTF-8"`
 
 type proxy struct {
+	a *auth.Auth
 	c *activitypub.Client
 	w fsthttp.ResponseWriter
 }
 
-func NewProxy(w fsthttp.ResponseWriter) *proxy {
-	return &proxy{activitypub.NewClient(), w}
+func NewProxy(w fsthttp.ResponseWriter, a *auth.Auth) *proxy {
+	return &proxy{a, activitypub.NewClient(), w}
 }
 
 func (p *proxy) debug(msg string) {
@@ -28,7 +30,7 @@ func (p *proxy) debug(msg string) {
 
 func (p *proxy) ErrorPage(status int, msg string) {
 	p.w.WriteHeader(status)
-	render.StartHtml(p.w)
+	render.StartHtml(p.w, p.a.User)
 	render.StartTable(p.w)
 	render.Error(p.w, msg)
 	render.EndTable(p.w)
@@ -56,7 +58,7 @@ func (p *proxy) NotePage(ctx context.Context, o *activitypub.Object) {
 	p.w.Header().Add("Content-Type", htmlType)
 	p.w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(p.w)
+	render.StartHtml(p.w, p.a.User)
 	render.StartTable(p.w)
 
 	n := o.ToNote()
@@ -76,7 +78,7 @@ func (p *proxy) CollectionPage(ctx context.Context, col *activitypub.Collection)
 	p.w.Header().Add("Content-Type", htmlType)
 	p.w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(p.w)
+	render.StartHtml(p.w, p.a.User)
 	p.renderCollection(ctx, col)
 	render.Footer(p.w)
 	render.EndHtml(p.w)
@@ -110,7 +112,7 @@ func (p *proxy) PersonPage(ctx context.Context, person *activitypub.Person) {
 	p.w.Header().Add("Content-Type", htmlType)
 	p.w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(p.w)
+	render.StartHtml(p.w, p.a.User)
 	render.PersonHeader(p.w, person)
 
 	p.renderCollection(ctx, col)
@@ -151,6 +153,15 @@ func (p *proxy) renderObject(ctx context.Context, o *activitypub.Object) {
 	default:
 		render.Unknown(p.w, o.Type())
 	}
+}
+
+func (p *proxy) UserHandler(ctx context.Context, r *fsthttp.Request) {
+	p.w.Header().Add("Content-Type", htmlType)
+	p.w.WriteHeader(fsthttp.StatusOK)
+	render.StartHtml(p.w, p.a.User)
+	p.w.Write([]byte(p.a.User.Login))
+	render.Footer(p.w)
+	render.EndHtml(p.w)
 }
 
 func (p *proxy) GenericRequestHandler(ctx context.Context, r *fsthttp.Request) {
