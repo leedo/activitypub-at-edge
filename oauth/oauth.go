@@ -1,4 +1,4 @@
-package auth
+package oauth
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 const host = "https://github.com"
 const apiHost = "https://api.github.com"
 
-type Auth struct {
+type OAuth struct {
 	clientId string
 	secret   string
 	token    string
@@ -28,14 +28,14 @@ type User struct {
 	Avatar string
 }
 
-func NewAuth(clientId, secret string) *Auth {
-	return &Auth{
+func NewOAuth(clientId, secret string) *OAuth {
+	return &OAuth{
 		clientId: clientId,
 		secret:   secret,
 	}
 }
 
-func (a *Auth) SetToken(r *fsthttp.Request) {
+func (a *OAuth) SetToken(r *fsthttp.Request) {
 	c, err := r.Cookie("auth")
 	if err != nil {
 		return
@@ -43,7 +43,7 @@ func (a *Auth) SetToken(r *fsthttp.Request) {
 	a.token = c.Value
 }
 
-func (a *Auth) Check(ctx context.Context) error {
+func (a *OAuth) Check(ctx context.Context) error {
 	buf := []byte(`{"access_token":"` + a.token + `"}`)
 	b := bytes.NewBuffer(buf)
 	req, err := fsthttp.NewRequest("POST", apiHost+"/applications/"+a.clientId+"/token", b)
@@ -65,13 +65,13 @@ func (a *Auth) Check(ctx context.Context) error {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != fsthttp.StatusOK {
-		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
+	}
+
+	if resp.StatusCode != fsthttp.StatusOK {
+		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
 	}
 
 	j, err := fastjson.Parse(string(body))
@@ -90,7 +90,7 @@ func (a *Auth) Check(ctx context.Context) error {
 	return nil
 }
 
-func (a *Auth) AuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
+func (a *OAuth) OAuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 	u, err := url.Parse(host + "/login/oauth/authorize")
 	if err != nil {
 		a.Error(w, err.Error())
@@ -104,12 +104,12 @@ func (a *Auth) AuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fst
 	w.WriteHeader(fsthttp.StatusFound)
 }
 
-func (a *Auth) Error(w fsthttp.ResponseWriter, msg string) {
+func (a *OAuth) Error(w fsthttp.ResponseWriter, msg string) {
 	w.WriteHeader(fsthttp.StatusForbidden)
 	w.Write([]byte(msg))
 }
 
-func (a *Auth) OAuthCallbackHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
+func (a *OAuth) OAuthCallbackHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		a.Error(w, "oauth failure")

@@ -3,10 +3,10 @@ package render
 import (
 	"io"
 
-	"github.com/leedo/activitypub-at-edge/auth"
+	"github.com/leedo/activitypub-at-edge/oauth"
 )
 
-func StartHtml(w io.Writer, u *auth.User) {
+func StartHtml(w io.Writer, u *oauth.User) {
 	w.Write([]byte(`<HTML><HEAD><STYLE TYPE="text/css" REL="stylesheet">body { font-family: "Comic Sans MS", "Comic Sans", cursive; }</STYLE></HEAD><BODY>`))
 	if u != nil {
 		w.Write([]byte(`<P>Welcome ` + u.Login + ` (<A HREF="/logout">Logout</A>)</P>`))

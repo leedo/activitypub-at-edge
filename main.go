@@ -5,14 +5,14 @@ import (
 
 	"github.com/fastly/compute-sdk-go/edgedict"
 	"github.com/fastly/compute-sdk-go/fsthttp"
-	"github.com/leedo/activitypub-at-edge/auth"
-	"github.com/leedo/activitypub-at-edge/proxy"
+	"github.com/leedo/activitypub-at-edge/oauth"
 	"github.com/leedo/activitypub-at-edge/render"
+	"github.com/leedo/activitypub-at-edge/server"
 )
 
 func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
-		d, err := edgedict.Open("auth")
+		d, err := edgedict.Open("oauth")
 		if err != nil {
 			w.WriteHeader(fsthttp.StatusBadGateway)
 			w.Write([]byte(err.Error()))
@@ -21,9 +21,12 @@ func main() {
 		clientId, err := d.Get("clientId")
 		secret, err := d.Get("secret")
 
-		a := auth.NewAuth(clientId, secret)
+		a := oauth.NewOAuth(clientId, secret)
 
 		switch r.URL.Path {
+		case "/favicon.ico":
+			w.WriteHeader(fsthttp.StatusNotFound)
+			return
 		case "/login":
 			render.Login(w)
 			return
@@ -33,7 +36,7 @@ func main() {
 			w.WriteHeader(fsthttp.StatusFound)
 			return
 		case "/gh_login":
-			a.AuthHandler(ctx, w, r)
+			a.OAuthHandler(ctx, w, r)
 			return
 		case "/oauth_callback":
 			a.OAuthCallbackHandler(ctx, w, r)
@@ -43,18 +46,19 @@ func main() {
 		a.SetToken(r)
 
 		if err := a.Check(ctx); err != nil {
+			//w.Header().Set("Location", "/login")
 			w.WriteHeader(fsthttp.StatusBadRequest)
 			w.Write([]byte(err.Error()))
 			return
 		}
 
-		p := proxy.NewProxy(w, a)
+		s := server.NewServer(w, a)
 
 		switch r.URL.Path {
 		case "/user":
-			p.UserHandler(ctx, r)
+			s.UserHandler(ctx, r)
 		default:
-			p.GenericRequestHandler(ctx, r)
+			s.GenericRequestHandler(ctx, r)
 		}
 	})
 }
