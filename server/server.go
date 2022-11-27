@@ -40,15 +40,19 @@ func (s *Server) ErrorPage(status int, msg string) {
 
 func (s *Server) remoteUrl(r *fsthttp.Request) (string, error) {
 	if r.Method != "GET" {
-		return "", fmt.Errorf("This method is not allowed")
+		return "", fmt.Errorf("this method is not allowed")
 	}
 	if r.URL.Path == "/favicon.ico" {
-		return "", fmt.Errorf("Not Found")
+		return "", fmt.Errorf("not found")
 	}
 
 	u, err := url.Parse(r.URL.RequestURI()[1:]) // strip leading slash
 	if err != nil {
-		return "", fmt.Errorf("Invalid URL")
+		return "", fmt.Errorf("invalid URL")
+	}
+
+	if u.Scheme != "https" {
+		return "", fmt.Errorf("invalid URL")
 	}
 
 	return u.String(), nil
@@ -99,13 +103,13 @@ func (s *Server) renderCollection(ctx context.Context, col *activitypub.Collecti
 func (s *Server) PersonPage(ctx context.Context, person *activitypub.Person) {
 	col, err := s.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusBadGateway, err.Error())
+		s.ErrorPage(fsthttp.StatusInternalServerError, err.Error())
 		return
 	}
 
 	col, err = s.c.GetCollection(ctx, col.First())
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusBadGateway, err.Error())
+		s.ErrorPage(fsthttp.StatusInternalServerError, err.Error())
 		return
 	}
 

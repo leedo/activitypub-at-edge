@@ -14,7 +14,7 @@ func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 		d, err := edgedict.Open("oauth")
 		if err != nil {
-			w.WriteHeader(fsthttp.StatusBadGateway)
+			w.WriteHeader(fsthttp.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
 		}
 
@@ -46,9 +46,8 @@ func main() {
 		a.SetToken(r)
 
 		if err := a.Check(ctx); err != nil {
-			//w.Header().Set("Location", "/login")
-			w.WriteHeader(fsthttp.StatusBadRequest)
-			w.Write([]byte(err.Error()))
+			w.Header().Set("Location", "/login")
+			w.WriteHeader(fsthttp.StatusFound)
 			return
 		}
 
