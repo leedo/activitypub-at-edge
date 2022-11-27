@@ -12,8 +12,11 @@ import (
 	"github.com/valyala/fastjson"
 )
 
-const host = "https://github.com"
-const apiHost = "https://api.github.com"
+const (
+	host     = "https://github.com"
+	apiHost  = "https://api.github.com"
+	jsonType = "application/json"
+)
 
 type OAuth struct {
 	clientId string
@@ -23,9 +26,9 @@ type OAuth struct {
 }
 
 type User struct {
-	Login  string
-	Id     string
-	Avatar string
+	Login     string
+	Id        string
+	AvatarUrl string
 }
 
 func NewOAuth(clientId, secret string) *OAuth {
@@ -53,8 +56,8 @@ func (a *OAuth) Check(ctx context.Context) error {
 
 	s := base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.secret))
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", jsonType)
+	req.Header.Set("Accept", jsonType)
 	req.Header.Set("Authorization", "Basic "+s)
 	req.Header.Set("User-Agent", "activitypub-at-edge")
 
@@ -82,9 +85,9 @@ func (a *OAuth) Check(ctx context.Context) error {
 	u := j.Get("user")
 
 	a.User = &User{
-		Login:  string(u.GetStringBytes("login")),
-		Id:     string(u.GetStringBytes("id")),
-		Avatar: string(u.GetStringBytes("avatar_url")),
+		Login:     string(u.GetStringBytes("login")),
+		Id:        string(u.GetStringBytes("id")),
+		AvatarUrl: string(u.GetStringBytes("avatar_url")),
 	}
 
 	return nil
@@ -123,8 +126,8 @@ func (a *OAuth) OAuthCallbackHandler(ctx context.Context, w fsthttp.ResponseWrit
 		a.Error(w, err.Error())
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", jsonType)
+	req.Header.Set("Accept", jsonType)
 
 	resp, err := req.Send(ctx, req.URL.Host)
 	if err != nil {

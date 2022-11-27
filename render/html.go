@@ -9,7 +9,7 @@ import (
 func StartHtml(w io.Writer, u *oauth.User) {
 	w.Write([]byte(`<HTML><HEAD><STYLE TYPE="text/css" REL="stylesheet">body { font-family: "Comic Sans MS", "Comic Sans", cursive; }</STYLE></HEAD><BODY>`))
 	if u != nil {
-		w.Write([]byte(`<P><IMG WIDTH=32 SRC="` + u.Avatar + `"> Welcome ` + u.Login + ` (<A HREF="/logout">Logout</A>)</P>`))
+		w.Write([]byte(`<P><IMG WIDTH=32 SRC="` + u.AvatarUrl + `"> Welcome ` + u.Login + ` (<A HREF="/logout">Logout</A>)</P>`))
 	}
 }
 func EndHtml(w io.Writer) {
