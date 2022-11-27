@@ -17,25 +17,24 @@ const htmlType = `text/html; charset="UTF-8"`
 type Server struct {
 	a *oauth.OAuth
 	c *activitypub.Client
-	w fsthttp.ResponseWriter
 }
 
-func NewServer(w fsthttp.ResponseWriter, a *oauth.OAuth) *Server {
-	return &Server{a, activitypub.NewClient(), w}
+func NewServer(a *oauth.OAuth) *Server {
+	return &Server{a, activitypub.NewClient()}
 }
 
 func (s *Server) debug(msg string) {
 	fmt.Fprintf(os.Stderr, "%s\n", msg)
 }
 
-func (s *Server) ErrorPage(status int, msg string) {
-	s.w.WriteHeader(status)
-	render.StartHtml(s.w, s.a.User)
-	render.StartTable(s.w)
-	render.Error(s.w, msg)
-	render.EndTable(s.w)
-	render.Footer(s.w)
-	render.EndHtml(s.w)
+func (s *Server) ErrorPage(status int, w fsthttp.ResponseWriter, msg string) {
+	w.WriteHeader(status)
+	render.StartHtml(w, s.a.User)
+	render.StartTable(w)
+	render.Error(w, msg)
+	render.EndTable(w)
+	render.Footer(w)
+	render.EndHtml(w)
 }
 
 func (s *Server) remoteUrl(r *fsthttp.Request) (string, error) {
@@ -58,137 +57,137 @@ func (s *Server) remoteUrl(r *fsthttp.Request) (string, error) {
 	return u.String(), nil
 }
 
-func (s *Server) NotePage(ctx context.Context, o *activitypub.Object) {
-	s.w.Header().Add("Content-Type", htmlType)
-	s.w.WriteHeader(fsthttp.StatusOK)
+func (s *Server) NotePage(ctx context.Context, w fsthttp.ResponseWriter, o *activitypub.Object) {
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(s.w, s.a.User)
-	render.StartTable(s.w)
+	render.StartHtml(w, s.a.User)
+	render.StartTable(w)
 
 	n := o.ToNote()
 
 	if parent := n.InReplyTo(); parent != nil {
-		s.renderObject(ctx, parent)
+		s.renderObject(ctx, w, parent)
 	}
 
-	s.renderObject(ctx, o)
+	s.renderObject(ctx, w, o)
 
-	render.EndTable(s.w)
-	render.Footer(s.w)
-	render.EndHtml(s.w)
+	render.EndTable(w)
+	render.Footer(w)
+	render.EndHtml(w)
 }
 
-func (s *Server) CollectionPage(ctx context.Context, col *activitypub.Collection) {
-	s.w.Header().Add("Content-Type", htmlType)
-	s.w.WriteHeader(fsthttp.StatusOK)
+func (s *Server) CollectionPage(ctx context.Context, w fsthttp.ResponseWriter, col *activitypub.Collection) {
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(s.w, s.a.User)
-	s.renderCollection(ctx, col)
-	render.Footer(s.w)
-	render.EndHtml(s.w)
+	render.StartHtml(w, s.a.User)
+	s.renderCollection(ctx, w, col)
+	render.Footer(w)
+	render.EndHtml(w)
 }
 
-func (s *Server) renderCollection(ctx context.Context, col *activitypub.Collection) {
-	render.Pagination(s.w, col)
-	render.StartTable(s.w)
+func (s *Server) renderCollection(ctx context.Context, w fsthttp.ResponseWriter, col *activitypub.Collection) {
+	render.Pagination(w, col)
+	render.StartTable(w)
 
 	for _, o := range col.CollectionItems() {
-		s.renderObject(ctx, o)
+		s.renderObject(ctx, w, o)
 	}
 
-	render.EndTable(s.w)
-	render.Pagination(s.w, col)
+	render.EndTable(w)
+	render.Pagination(w, col)
 }
 
-func (s *Server) PersonPage(ctx context.Context, person *activitypub.Person) {
+func (s *Server) PersonPage(ctx context.Context, w fsthttp.ResponseWriter, person *activitypub.Person) {
 	col, err := s.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusInternalServerError, err.Error())
+		s.ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
 		return
 	}
 
 	col, err = s.c.GetCollection(ctx, col.First())
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusInternalServerError, err.Error())
+		s.ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
 		return
 	}
 
-	s.w.Header().Add("Content-Type", htmlType)
-	s.w.WriteHeader(fsthttp.StatusOK)
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(s.w, s.a.User)
-	render.PersonHeader(s.w, person)
+	render.StartHtml(w, s.a.User)
+	render.PersonHeader(w, person)
 
-	s.renderCollection(ctx, col)
+	s.renderCollection(ctx, w, col)
 
-	render.Footer(s.w)
-	render.EndHtml(s.w)
+	render.Footer(w)
+	render.EndHtml(w)
 }
 
-func (s *Server) renderObject(ctx context.Context, o *activitypub.Object) {
+func (s *Server) renderObject(ctx context.Context, w fsthttp.ResponseWriter, o *activitypub.Object) {
 	if err := s.c.LoadObject(ctx, o); err != nil {
-		render.Error(s.w, err.Error())
+		render.Error(w, err.Error())
 		return
 	}
 
 	switch o.Type() {
 	case activitypub.CreateType:
-		s.renderObject(ctx, o.ToActivity().Object())
+		s.renderObject(ctx, w, o.ToActivity().Object())
 
 	case activitypub.AnnounceType:
 		activity := o.ToActivity()
 		person, err := s.c.GetPerson(ctx, activity.Actor())
 		if err != nil {
-			render.Error(s.w, err.Error())
+			render.Error(w, err.Error())
 		} else {
-			render.Announce(s.w, person)
-			s.renderObject(ctx, activity.Object())
+			render.Announce(w, person)
+			s.renderObject(ctx, w, activity.Object())
 		}
 
 	case activitypub.NoteType:
 		note := o.ToNote()
 		person, err := s.c.GetPerson(ctx, note.AttributedTo())
 		if err != nil {
-			render.Error(s.w, err.Error())
+			render.Error(w, err.Error())
 		} else {
-			render.Note(s.w, person, note)
+			render.Note(w, person, note)
 		}
 
 	default:
-		render.Unknown(s.w, o.Type())
+		render.Unknown(w, o.Type())
 	}
 }
 
-func (s *Server) UserHandler(ctx context.Context, r *fsthttp.Request) {
-	s.w.Header().Add("Content-Type", htmlType)
-	s.w.WriteHeader(fsthttp.StatusOK)
-	render.StartHtml(s.w, s.a.User)
-	s.w.Write([]byte(s.a.User.Login))
-	render.Footer(s.w)
-	render.EndHtml(s.w)
+func (s *Server) UserHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
+	render.StartHtml(w, s.a.User)
+	w.Write([]byte(s.a.User.Login))
+	render.Footer(w)
+	render.EndHtml(w)
 }
 
-func (s *Server) GenericRequestHandler(ctx context.Context, r *fsthttp.Request) {
+func (s *Server) GenericRequestHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 	remoteUrl, err := s.remoteUrl(r)
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusBadRequest, err.Error())
+		s.ErrorPage(fsthttp.StatusBadRequest, w, err.Error())
 		return
 	}
 
 	o, err := s.c.GetObject(ctx, remoteUrl)
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusBadRequest, err.Error())
+		s.ErrorPage(fsthttp.StatusBadRequest, w, err.Error())
 		return
 	}
 
 	switch o.Type() {
 	case activitypub.PersonType:
-		s.PersonPage(ctx, o.ToPerson())
+		s.PersonPage(ctx, w, o.ToPerson())
 	case activitypub.NoteType:
-		s.NotePage(ctx, o)
+		s.NotePage(ctx, w, o)
 	case activitypub.OrderedCollectionPageType, activitypub.OrderedCollectionType:
-		s.CollectionPage(ctx, o.ToCollection())
+		s.CollectionPage(ctx, w, o.ToCollection())
 	default:
-		s.ErrorPage(fsthttp.StatusNotFound, "unknown object type "+o.Type())
+		s.ErrorPage(fsthttp.StatusNotFound, w, "unknown object type "+o.Type())
 	}
 }

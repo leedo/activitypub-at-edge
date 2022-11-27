@@ -59,13 +59,13 @@ func main() {
 			return
 		}
 
-		s := server.NewServer(w, a)
+		s := server.NewServer(a)
 
 		switch r.URL.Path {
 		case "/user":
-			s.UserHandler(ctx, r)
+			s.UserHandler(ctx, w, r)
 		default:
-			s.GenericRequestHandler(ctx, r)
+			s.GenericRequestHandler(ctx, w, r)
 		}
 	})
 }
