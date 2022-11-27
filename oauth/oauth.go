@@ -84,7 +84,7 @@ func (a *OAuth) Check(ctx context.Context) error {
 	a.User = &User{
 		Login:  string(u.GetStringBytes("login")),
 		Id:     string(u.GetStringBytes("id")),
-		Avatar: string(u.GetStringBytes("avatar")),
+		Avatar: string(u.GetStringBytes("avatar_url")),
 	}
 
 	return nil
