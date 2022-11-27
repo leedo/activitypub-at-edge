@@ -10,6 +10,14 @@ import (
 	"github.com/leedo/activitypub-at-edge/server"
 )
 
+const (
+	loginPath         = "/login"
+	logoutPath        = "/logout"
+	oauthPath         = "/oauth_login"
+	oauthCallbackPath = "/oauth_callback"
+	faviconPath       = "/favicon.ico"
+)
+
 func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 		d, err := edgedict.Open("oauth")
@@ -24,21 +32,21 @@ func main() {
 		a := oauth.NewOAuth(clientId, secret)
 
 		switch r.URL.Path {
-		case "/favicon.ico":
+		case faviconPath:
 			w.WriteHeader(fsthttp.StatusNotFound)
 			return
-		case "/login":
+		case loginPath:
 			render.Login(w)
 			return
-		case "/logout":
+		case logoutPath:
 			w.Header().Set("Set-Cookie", "auth=")
-			w.Header().Set("Location", "/login")
+			w.Header().Set("Location", loginPath)
 			w.WriteHeader(fsthttp.StatusFound)
 			return
-		case "/gh_login":
+		case oauthPath:
 			a.OAuthHandler(ctx, w, r)
 			return
-		case "/oauth_callback":
+		case oauthCallbackPath:
 			a.OAuthCallbackHandler(ctx, w, r)
 			return
 		}
