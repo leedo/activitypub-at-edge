@@ -21,11 +21,10 @@ const (
 type OAuth struct {
 	clientId string
 	secret   string
-	token    string
-	User     *User
 }
 
 type User struct {
+	token     string
 	Login     string
 	Id        string
 	AvatarUrl string
@@ -38,27 +37,84 @@ func NewOAuth(clientId, secret string) *OAuth {
 	}
 }
 
-func (a *OAuth) SetToken(r *fsthttp.Request) {
-	c, err := r.Cookie("auth")
+func (a *OAuth) Check(ctx context.Context, r *fsthttp.Request) (*User, error) {
+	t, err := r.Cookie("auth")
 	if err != nil {
-		return
+		return nil, err
 	}
-	a.token = c.Value
+
+	body, err := a.checkToken(ctx, t.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	j, err := fastjson.Parse(string(body))
+	if err != nil {
+		return nil, err
+	}
+
+	u := j.Get("user")
+
+	return &User{
+		token:     t.Value,
+		Login:     string(u.GetStringBytes("login")),
+		Id:        string(u.GetStringBytes("id")),
+		AvatarUrl: string(u.GetStringBytes("avatar_url")),
+	}, nil
 }
 
-func (a *OAuth) Check(ctx context.Context) error {
-	buf := []byte(`{"access_token":"` + a.token + `"}`)
+func (a *OAuth) Error(w fsthttp.ResponseWriter, msg string) {
+	w.WriteHeader(fsthttp.StatusForbidden)
+	w.Write([]byte(msg))
+}
+
+func (a *OAuth) basicAuth() string {
+	return base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.secret))
+}
+
+func (a *OAuth) checkToken(ctx context.Context, token string) ([]byte, error) {
+	buf := []byte(`{"access_token":"` + token + `"}`)
 	b := bytes.NewBuffer(buf)
 	req, err := fsthttp.NewRequest("POST", apiHost+"/applications/"+a.clientId+"/token", b)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", jsonType)
+	req.Header.Set("Accept", jsonType)
+	req.Header.Set("Authorization", "Basic "+a.basicAuth())
+	req.Header.Set("User-Agent", "activitypub-at-edge")
+
+	resp, err := req.Send(ctx, req.URL.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != fsthttp.StatusOK {
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
+	}
+
+	return body, nil
+}
+
+func (a *OAuth) deleteToken(ctx context.Context, t string) error {
+	buf := []byte(fmt.Sprintf(`{"access_token":"%s"}`, t))
+	b := bytes.NewBuffer(buf)
+	req, err := fsthttp.NewRequest("DELETE", apiHost+"/applications/"+a.clientId+"/token", b)
 	if err != nil {
 		return err
 	}
 
-	s := base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.secret))
-
 	req.Header.Set("Content-Type", jsonType)
 	req.Header.Set("Accept", jsonType)
-	req.Header.Set("Authorization", "Basic "+s)
+	req.Header.Set("Authorization", "Basic "+a.basicAuth())
 	req.Header.Set("User-Agent", "activitypub-at-edge")
 
 	resp, err := req.Send(ctx, req.URL.Host)
@@ -68,29 +124,47 @@ func (a *OAuth) Check(ctx context.Context) error {
 
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != fsthttp.StatusOK {
-		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
-	}
-
-	j, err := fastjson.Parse(string(body))
-	if err != nil {
-		return err
-	}
-
-	u := j.Get("user")
-
-	a.User = &User{
-		Login:     string(u.GetStringBytes("login")),
-		Id:        string(u.GetStringBytes("id")),
-		AvatarUrl: string(u.GetStringBytes("avatar_url")),
-	}
-
 	return nil
+}
+
+func (a *OAuth) createToken(ctx context.Context, code string) (string, error) {
+	if code == "" {
+		return "", fmt.Errorf("empty code")
+	}
+
+	buf := []byte(fmt.Sprintf(`{"client_id":"%s","code":"%s","client_secret":"%s"}`, a.clientId, code, a.secret))
+	b := bytes.NewBuffer(buf)
+	req, err := fsthttp.NewRequest("POST", host+"/login/oauth/access_token", b)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", jsonType)
+	req.Header.Set("Accept", jsonType)
+
+	resp, err := req.Send(ctx, req.URL.Host)
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	d, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	j, err := fastjson.Parse(string(d))
+	if err != nil {
+		return "", err
+	}
+
+	t := string(j.GetStringBytes("access_token"))
+	if t == "" {
+		return "", fmt.Errorf("no token")
+	}
+
+	return t, nil
 }
 
 func (a *OAuth) OAuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
@@ -107,51 +181,21 @@ func (a *OAuth) OAuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *f
 	w.WriteHeader(fsthttp.StatusFound)
 }
 
-func (a *OAuth) Error(w fsthttp.ResponseWriter, msg string) {
-	w.WriteHeader(fsthttp.StatusForbidden)
-	w.Write([]byte(msg))
+func (a *OAuth) OAuthLogoutHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request, u *User, redirect string) {
+	if err := a.deleteToken(ctx, u.token); err != nil {
+		a.Error(w, "oauth delete failure")
+		return
+	}
+
+	w.Header().Set("Set-Cookie", "auth=")
+	w.Header().Set("Location", redirect)
+	w.WriteHeader(fsthttp.StatusFound)
 }
 
 func (a *OAuth) OAuthCallbackHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		a.Error(w, "oauth failure")
-		return
-	}
-
-	buf := []byte(fmt.Sprintf(`{"client_id":"%s","code":"%s","client_secret":"%s"}`, a.clientId, code, a.secret))
-	b := bytes.NewBuffer(buf)
-	req, err := fsthttp.NewRequest("POST", host+"/login/oauth/access_token", b)
+	t, err := a.createToken(ctx, r.URL.Query().Get("code"))
 	if err != nil {
 		a.Error(w, err.Error())
-		return
-	}
-	req.Header.Set("Content-Type", jsonType)
-	req.Header.Set("Accept", jsonType)
-
-	resp, err := req.Send(ctx, req.URL.Host)
-	if err != nil {
-		a.Error(w, err.Error())
-		return
-	}
-
-	defer resp.Body.Close()
-
-	d, err := io.ReadAll(resp.Body)
-	if err != nil {
-		a.Error(w, err.Error())
-		return
-	}
-
-	j, err := fastjson.Parse(string(d))
-	if err != nil {
-		a.Error(w, err.Error())
-		return
-	}
-
-	t := string(j.GetStringBytes("access_token"))
-	if t == "" {
-		a.Error(w, "no access token")
 		return
 	}
 

@@ -15,12 +15,12 @@ import (
 const htmlType = `text/html; charset="UTF-8"`
 
 type Server struct {
-	a *oauth.OAuth
+	u *oauth.User
 	c *activitypub.Client
 }
 
-func NewServer(a *oauth.OAuth) *Server {
-	return &Server{a, activitypub.NewClient()}
+func NewServer(u *oauth.User) *Server {
+	return &Server{u, activitypub.NewClient()}
 }
 
 func (s *Server) debug(msg string) {
@@ -29,7 +29,7 @@ func (s *Server) debug(msg string) {
 
 func (s *Server) ErrorPage(status int, w fsthttp.ResponseWriter, msg string) {
 	w.WriteHeader(status)
-	render.StartHtml(w, s.a.User)
+	render.StartHtml(w, s.u)
 	render.StartTable(w)
 	render.Error(w, msg)
 	render.EndTable(w)
@@ -61,7 +61,7 @@ func (s *Server) NotePage(ctx context.Context, w fsthttp.ResponseWriter, o *acti
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(w, s.a.User)
+	render.StartHtml(w, s.u)
 	render.StartTable(w)
 
 	n := o.ToNote()
@@ -81,7 +81,7 @@ func (s *Server) CollectionPage(ctx context.Context, w fsthttp.ResponseWriter, c
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(w, s.a.User)
+	render.StartHtml(w, s.u)
 	s.renderCollection(ctx, w, col)
 	render.Footer(w)
 	render.EndHtml(w)
@@ -115,7 +115,7 @@ func (s *Server) PersonPage(ctx context.Context, w fsthttp.ResponseWriter, perso
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
 
-	render.StartHtml(w, s.a.User)
+	render.StartHtml(w, s.u)
 	render.PersonHeader(w, person)
 
 	s.renderCollection(ctx, w, col)
@@ -161,8 +161,8 @@ func (s *Server) renderObject(ctx context.Context, w fsthttp.ResponseWriter, o *
 func (s *Server) UserHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
-	render.StartHtml(w, s.a.User)
-	w.Write([]byte(s.a.User.Login))
+	render.StartHtml(w, s.u)
+	w.Write([]byte(s.u.Login))
 	render.Footer(w)
 	render.EndHtml(w)
 }

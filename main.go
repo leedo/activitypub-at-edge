@@ -38,11 +38,6 @@ func main() {
 		case loginPath:
 			render.Login(w)
 			return
-		case logoutPath:
-			w.Header().Set("Set-Cookie", "auth=")
-			w.Header().Set("Location", loginPath)
-			w.WriteHeader(fsthttp.StatusFound)
-			return
 		case oauthPath:
 			a.OAuthHandler(ctx, w, r)
 			return
@@ -51,17 +46,18 @@ func main() {
 			return
 		}
 
-		a.SetToken(r)
-
-		if err := a.Check(ctx); err != nil {
-			w.Header().Set("Location", "/login")
+		u, err := a.Check(ctx, r)
+		if err != nil {
+			w.Header().Set("Location", loginPath)
 			w.WriteHeader(fsthttp.StatusFound)
 			return
 		}
 
-		s := server.NewServer(a)
+		s := server.NewServer(u)
 
 		switch r.URL.Path {
+		case logoutPath:
+			a.OAuthLogoutHandler(ctx, w, r, u, loginPath)
 		case "/user":
 			s.UserHandler(ctx, w, r)
 		default:
