@@ -72,10 +72,8 @@ func (a *OAuth) basicAuth() string {
 	return base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.secret))
 }
 
-func (a *OAuth) checkToken(ctx context.Context, token string) ([]byte, error) {
-	buf := []byte(`{"access_token":"` + token + `"}`)
-	b := bytes.NewBuffer(buf)
-	req, err := fsthttp.NewRequest("POST", apiHost+"/applications/"+a.clientId+"/token", b)
+func (a *OAuth) request(ctx context.Context, method string, url string, b io.Reader) ([]byte, error) {
+	req, err := fsthttp.NewRequest(method, url, b)
 	if err != nil {
 		return nil, err
 	}
@@ -104,27 +102,16 @@ func (a *OAuth) checkToken(ctx context.Context, token string) ([]byte, error) {
 	return body, nil
 }
 
-func (a *OAuth) deleteToken(ctx context.Context, t string) error {
+func (a *OAuth) checkToken(ctx context.Context, token string) ([]byte, error) {
+	buf := []byte(`{"access_token":"` + token + `"}`)
+	b := bytes.NewBuffer(buf)
+	return a.request(ctx, "POST", apiHost+"/applications/"+a.clientId+"/token", b)
+}
+
+func (a *OAuth) deleteToken(ctx context.Context, t string) ([]byte, error) {
 	buf := []byte(fmt.Sprintf(`{"access_token":"%s"}`, t))
 	b := bytes.NewBuffer(buf)
-	req, err := fsthttp.NewRequest("DELETE", apiHost+"/applications/"+a.clientId+"/token", b)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", jsonType)
-	req.Header.Set("Accept", jsonType)
-	req.Header.Set("Authorization", "Basic "+a.basicAuth())
-	req.Header.Set("User-Agent", "activitypub-at-edge")
-
-	resp, err := req.Send(ctx, req.URL.Host)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	return nil
+	return a.request(ctx, "DELETE", apiHost+"/applications/"+a.clientId+"/token", b)
 }
 
 func (a *OAuth) createToken(ctx context.Context, code string) (string, error) {
@@ -134,27 +121,13 @@ func (a *OAuth) createToken(ctx context.Context, code string) (string, error) {
 
 	buf := []byte(fmt.Sprintf(`{"client_id":"%s","code":"%s","client_secret":"%s"}`, a.clientId, code, a.secret))
 	b := bytes.NewBuffer(buf)
-	req, err := fsthttp.NewRequest("POST", host+"/login/oauth/access_token", b)
+
+	body, err := a.request(ctx, "POST", host+"/login/oauth/access_token", b)
 	if err != nil {
 		return "", err
 	}
 
-	req.Header.Set("Content-Type", jsonType)
-	req.Header.Set("Accept", jsonType)
-
-	resp, err := req.Send(ctx, req.URL.Host)
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-
-	d, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	j, err := fastjson.Parse(string(d))
+	j, err := fastjson.Parse(string(body))
 	if err != nil {
 		return "", err
 	}
@@ -182,7 +155,7 @@ func (a *OAuth) OAuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *f
 }
 
 func (a *OAuth) OAuthLogoutHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request, u *User, redirect string) {
-	if err := a.deleteToken(ctx, u.token); err != nil {
+	if _, err := a.deleteToken(ctx, u.token); err != nil {
 		a.Error(w, "oauth delete failure")
 		return
 	}
