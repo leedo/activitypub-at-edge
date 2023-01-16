@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
+	"github.com/leedo/activitypub-at-edge/user"
 	"github.com/valyala/fastjson"
 )
 
@@ -23,13 +24,6 @@ type OAuth struct {
 	secret   string
 }
 
-type User struct {
-	token     string
-	Login     string
-	Id        string
-	AvatarUrl string
-}
-
 func NewOAuth(clientId, secret string) *OAuth {
 	return &OAuth{
 		clientId: clientId,
@@ -37,7 +31,7 @@ func NewOAuth(clientId, secret string) *OAuth {
 	}
 }
 
-func (a *OAuth) Check(ctx context.Context, r *fsthttp.Request) (*User, error) {
+func (a *OAuth) Check(ctx context.Context, r *fsthttp.Request) (*user.User, error) {
 	t, err := r.Cookie("auth")
 	if err != nil {
 		return nil, err
@@ -55,11 +49,11 @@ func (a *OAuth) Check(ctx context.Context, r *fsthttp.Request) (*User, error) {
 
 	u := j.Get("user")
 
-	return &User{
-		token:     t.Value,
-		Login:     string(u.GetStringBytes("login")),
-		Id:        string(u.GetStringBytes("id")),
-		AvatarUrl: string(u.GetStringBytes("avatar_url")),
+	return &user.User{
+		OauthToken: t.Value,
+		Login:      string(u.GetStringBytes("login")),
+		Id:         fmt.Sprintf("%d", u.GetInt("id")),
+		AvatarUrl:  string(u.GetStringBytes("avatar_url")),
 	}, nil
 }
 
@@ -154,8 +148,8 @@ func (a *OAuth) OAuthHandler(ctx context.Context, w fsthttp.ResponseWriter, r *f
 	w.WriteHeader(fsthttp.StatusFound)
 }
 
-func (a *OAuth) OAuthLogoutHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request, u *User, redirect string) {
-	if _, err := a.deleteToken(ctx, u.token); err != nil {
+func (a *OAuth) OAuthLogoutHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request, u *user.User, redirect string) {
+	if _, err := a.deleteToken(ctx, u.OauthToken); err != nil {
 		a.Error(w, "oauth delete failure")
 		return
 	}

@@ -15,12 +15,6 @@ type Object struct {
 	json *fastjson.Value
 }
 
-type CollectionIterator struct {
-	v     []*fastjson.Value
-	pos   int
-	count int
-}
-
 type Person Object
 type Collection Object
 type Note Object

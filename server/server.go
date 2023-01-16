@@ -3,28 +3,41 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
 	"github.com/leedo/activitypub-at-edge/activitypub"
-	"github.com/leedo/activitypub-at-edge/oauth"
 	"github.com/leedo/activitypub-at-edge/render"
+	"github.com/leedo/activitypub-at-edge/store"
+	"github.com/leedo/activitypub-at-edge/user"
 )
 
 const htmlType = `text/html; charset="UTF-8"`
 
 type Server struct {
-	u *oauth.User
+	u *user.User
 	c *activitypub.Client
+	s *store.Store
 }
 
-func NewServer(u *oauth.User) *Server {
-	return &Server{u, activitypub.NewClient()}
+func NewServer(u *user.User, s *store.Store) *Server {
+	return &Server{u, activitypub.NewClient(), s}
 }
 
 func (s *Server) debug(msg string) {
 	fmt.Fprintf(os.Stderr, "%s\n", msg)
+}
+
+func ErrorPage(status int, w fsthttp.ResponseWriter, msg string) {
+	w.WriteHeader(status)
+	render.StartHtml(w, nil)
+	render.StartTable(w)
+	render.Error(w, msg)
+	render.EndTable(w)
+	render.Footer(w)
+	render.EndHtml(w)
 }
 
 func (s *Server) ErrorPage(status int, w fsthttp.ResponseWriter, msg string) {
@@ -112,11 +125,17 @@ func (s *Server) PersonPage(ctx context.Context, w fsthttp.ResponseWriter, perso
 		return
 	}
 
+	settings, err := s.u.Settings()
+	if err != nil {
+		s.ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		return
+	}
+
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
 
 	render.StartHtml(w, s.u)
-	render.PersonHeader(w, person)
+	render.PersonHeader(w, person, settings)
 
 	s.renderCollection(ctx, w, col)
 
@@ -162,9 +181,67 @@ func (s *Server) UserHandler(ctx context.Context, w fsthttp.ResponseWriter, r *f
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
 	render.StartHtml(w, s.u)
-	w.Write([]byte(s.u.Login))
+
+	settings, err := s.u.Settings()
+	if err != nil {
+		render.Error(w, err.Error())
+	} else {
+		render.Subscriptions(w, settings)
+	}
+
 	render.Footer(w)
 	render.EndHtml(w)
+}
+
+func (s *Server) SubscribeHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		return
+	}
+
+	q, err := url.ParseQuery(string(b))
+	if err != nil {
+		ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		return
+	}
+
+	if !q.Has("url") {
+		ErrorPage(fsthttp.StatusInternalServerError, w, "url is required")
+		return
+	}
+
+	u := q.Get("url")
+	if _, err := url.Parse(u); err != nil {
+		ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		return
+	}
+
+	if !q.Has("action") {
+		ErrorPage(fsthttp.StatusInternalServerError, w, "action is required")
+		return
+	}
+
+	switch q.Get("action") {
+	case "add":
+		if err := s.u.Subscribe(u); err != nil {
+			ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+			return
+		}
+	case "remove":
+		if err := s.u.Unsubscribe(u); err != nil {
+			ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+			return
+		}
+	default:
+		ErrorPage(fsthttp.StatusInternalServerError, w, "invalid action")
+		return
+	}
+
+	w.Header().Set("Location", "/")
+	w.WriteHeader(fsthttp.StatusFound)
+	return
+
 }
 
 func (s *Server) GenericRequestHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
