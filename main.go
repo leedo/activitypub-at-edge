@@ -23,11 +23,11 @@ func main() {
 	fsthttp.ServeFunc(func(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 		c, err := config.ReadConfig()
 		if err != nil {
-			server.ErrorPage(fsthttp.StatusInternalServerError, w, "config error: "+err.Error())
+			server.InternalErrorPage(w, "config error: "+err.Error())
 			return
 		}
 
-		a := oauth.NewOAuth(c.OAuthClientId, c.OAuthSecret)
+		a := oauth.New(c.OAuthClientId, c.OAuthSecret)
 
 		switch r.URL.Path {
 		case faviconPath:
@@ -53,7 +53,7 @@ func main() {
 
 		t, err := store.Open(c.StoreName)
 		if err != nil {
-			server.ErrorPage(fsthttp.StatusInternalServerError, w, "store error: "+err.Error())
+			server.InternalErrorPage(w, "store error: "+err.Error())
 			return
 		}
 
@@ -61,7 +61,7 @@ func main() {
 		s := server.NewServer(u, t)
 
 		if err := u.PreloadSettings(); err != nil {
-			server.ErrorPage(fsthttp.StatusInternalServerError, w, "settings error: "+err.Error())
+			server.InternalErrorPage(w, "settings error: "+err.Error())
 			return
 		}
 

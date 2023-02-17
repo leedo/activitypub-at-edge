@@ -30,6 +30,14 @@ func (s *Server) debug(msg string) {
 	fmt.Fprintf(os.Stderr, "%s\n", msg)
 }
 
+func InternalErrorPage(w fsthttp.ResponseWriter, msg string) {
+	ErrorPage(fsthttp.StatusInternalServerError, w, msg)
+}
+
+func (s *Server) InternalErrorPage(w fsthttp.ResponseWriter, msg string) {
+	s.ErrorPage(fsthttp.StatusInternalServerError, w, msg)
+}
+
 func ErrorPage(status int, w fsthttp.ResponseWriter, msg string) {
 	w.WriteHeader(status)
 	render.StartHtml(w, nil)
@@ -90,6 +98,26 @@ func (s *Server) NotePage(ctx context.Context, w fsthttp.ResponseWriter, o *acti
 	render.EndHtml(w)
 }
 
+func (s *Server) QuestionPage(ctx context.Context, w fsthttp.ResponseWriter, o *activitypub.Object) {
+	w.Header().Add("Content-Type", htmlType)
+	w.WriteHeader(fsthttp.StatusOK)
+
+	render.StartHtml(w, s.u)
+	render.StartTable(w)
+
+	q := o.ToQuestion()
+
+	if parent := q.InReplyTo(); parent != nil {
+		s.renderObject(ctx, w, parent)
+	}
+
+	s.renderObject(ctx, w, o)
+
+	render.EndTable(w)
+	render.Footer(w)
+	render.EndHtml(w)
+}
+
 func (s *Server) CollectionPage(ctx context.Context, w fsthttp.ResponseWriter, col *activitypub.Collection) {
 	w.Header().Add("Content-Type", htmlType)
 	w.WriteHeader(fsthttp.StatusOK)
@@ -115,19 +143,19 @@ func (s *Server) renderCollection(ctx context.Context, w fsthttp.ResponseWriter,
 func (s *Server) PersonPage(ctx context.Context, w fsthttp.ResponseWriter, person *activitypub.Person) {
 	col, err := s.c.GetCollection(ctx, person.Outbox())
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		s.InternalErrorPage(w, err.Error())
 		return
 	}
 
 	col, err = s.c.GetCollection(ctx, col.First())
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		s.InternalErrorPage(w, err.Error())
 		return
 	}
 
 	settings, err := s.u.Settings()
 	if err != nil {
-		s.ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		s.InternalErrorPage(w, err.Error())
 		return
 	}
 
@@ -172,6 +200,15 @@ func (s *Server) renderObject(ctx context.Context, w fsthttp.ResponseWriter, o *
 			render.Note(w, person, note)
 		}
 
+	case activitypub.QuestionType:
+		question := o.ToQuestion()
+		person, err := s.c.GetPerson(ctx, question.AttributedTo())
+		if err != nil {
+			render.Error(w, err.Error())
+		} else {
+			render.Question(w, person, question)
+		}
+
 	default:
 		render.Unknown(w, o.Type())
 	}
@@ -196,45 +233,45 @@ func (s *Server) UserHandler(ctx context.Context, w fsthttp.ResponseWriter, r *f
 func (s *Server) SubscribeHandler(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Request) {
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
-		ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		InternalErrorPage(w, err.Error())
 		return
 	}
 
 	q, err := url.ParseQuery(string(b))
 	if err != nil {
-		ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		InternalErrorPage(w, err.Error())
 		return
 	}
 
 	if !q.Has("url") {
-		ErrorPage(fsthttp.StatusInternalServerError, w, "url is required")
+		InternalErrorPage(w, "url is required")
 		return
 	}
 
 	u := q.Get("url")
 	if _, err := url.Parse(u); err != nil {
-		ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+		InternalErrorPage(w, err.Error())
 		return
 	}
 
 	if !q.Has("action") {
-		ErrorPage(fsthttp.StatusInternalServerError, w, "action is required")
+		InternalErrorPage(w, "action is required")
 		return
 	}
 
 	switch q.Get("action") {
 	case "add":
 		if err := s.u.Subscribe(u); err != nil {
-			ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+			InternalErrorPage(w, err.Error())
 			return
 		}
 	case "remove":
 		if err := s.u.Unsubscribe(u); err != nil {
-			ErrorPage(fsthttp.StatusInternalServerError, w, err.Error())
+			InternalErrorPage(w, err.Error())
 			return
 		}
 	default:
-		ErrorPage(fsthttp.StatusInternalServerError, w, "invalid action")
+		InternalErrorPage(w, "invalid action")
 		return
 	}
 
@@ -262,6 +299,8 @@ func (s *Server) GenericRequestHandler(ctx context.Context, w fsthttp.ResponseWr
 		s.PersonPage(ctx, w, o.ToPerson())
 	case activitypub.NoteType:
 		s.NotePage(ctx, w, o)
+	case activitypub.QuestionType:
+		s.QuestionPage(ctx, w, o)
 	case activitypub.OrderedCollectionPageType, activitypub.OrderedCollectionType:
 		s.CollectionPage(ctx, w, o.ToCollection())
 	default:

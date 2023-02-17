@@ -8,6 +8,7 @@ func (o *Object) ToNote() *Note             { return &Note{o.json} }
 func (o *Object) ToPerson() *Person         { return &Person{o.json} }
 func (o *Object) ToCollection() *Collection { return &Collection{o.json} }
 func (o *Object) ToActivity() *Activity     { return &Activity{o.json} }
+func (o *Object) ToQuestion() *Question     { return &Question{o.json} }
 
 func (o *Object) IsLoaded() bool {
 	return o.json.Type() == fastjson.TypeObject

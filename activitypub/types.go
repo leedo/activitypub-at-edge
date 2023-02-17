@@ -9,6 +9,7 @@ const (
 	OrderedCollectionType     = "OrderedCollection"
 	CreateType                = "Create"
 	AnnounceType              = "Announce"
+	QuestionType              = "Question"
 )
 
 type Object struct {
@@ -19,6 +20,7 @@ type Person Object
 type Collection Object
 type Note Object
 type Activity Object
+type Question Object
 
 type Image struct {
 	URL string

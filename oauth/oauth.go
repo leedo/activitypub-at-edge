@@ -24,7 +24,7 @@ type OAuth struct {
 	secret   string
 }
 
-func NewOAuth(clientId, secret string) *OAuth {
+func New(clientId, secret string) *OAuth {
 	return &OAuth{
 		clientId: clientId,
 		secret:   secret,
